@@ -16,8 +16,26 @@ import { Icon, IconBadge, type IconName } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useSeriesColor } from '@/constants/series-colors';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+
+/** Barra de abas da web (expo-router/ui), que fica por cima do conteúdo. */
+const WEB_TAB_BAR = 76;
+
+/**
+ * Distância do botão flutuante até o fundo da tela da aba, logo acima da barra de abas.
+ * - Android: as abas nativas já colocam o conteúdo acima da barra (SafeAreaView automático),
+ *   então basta uma margem.
+ * - iOS: o conteúdo passa por trás da barra, mas a área segura inferior já inclui a altura dela.
+ * - Web: a barra é desenhada por cima do conteúdo.
+ */
+function fabBottom(safeBottom: number): number {
+  return Platform.select({
+    android: Spacing.three,
+    ios: safeBottom + Spacing.two,
+    default: WEB_TAB_BAR + Spacing.three,
+  });
+}
 
 /** Tela de aba: título grande, ação opcional à direita, rolagem e botão flutuante. */
 export function Screen({
@@ -40,7 +58,8 @@ export function Screen({
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + Spacing.four, paddingBottom: insets.bottom + BottomTabInset + 110 },
+          // Espaço no fim da lista para o botão flutuante não cobrir o último item.
+          { paddingTop: insets.top + Spacing.four, paddingBottom: fabBottom(insets.bottom) + 80 },
         ]}>
         <Row style={styles.screenHeader}>
           <View style={styles.flex}>
@@ -192,7 +211,7 @@ export function Fab({ label, onPress }: { label: string; onPress: () => void }) 
         {
           backgroundColor: theme.primary,
           shadowColor: theme.primary,
-          bottom: insets.bottom + BottomTabInset + Spacing.three,
+          bottom: fabBottom(insets.bottom),
         },
         pressed && styles.pressedScale,
       ]}>
