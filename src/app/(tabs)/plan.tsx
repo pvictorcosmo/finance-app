@@ -3,9 +3,10 @@ import { useMemo, useState } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, DayStepper, Field, KeyValue, ListItem, Screen, SectionHeader } from '@/components/ui';
-import { categoryLimit } from '@/domain/budget';
+import { categoryLimit, incomesInCycle } from '@/domain/budget';
 import { cycleFor } from '@/domain/cycle';
-import { formatShort, todayISO } from '@/domain/dates';
+import { formatShort, parseISO, todayISO } from '@/domain/dates';
+import { incomeKindLabel } from '@/domain/labels';
 import { centsToInput, formatBRL, parseMoney } from '@/domain/money';
 import { paymentLabel } from '@/domain/payment';
 import { useTheme } from '@/hooks/use-theme';
@@ -25,11 +26,13 @@ export default function PlanScreen() {
     setSalaryText(value ? centsToInput(value) : '');
   };
 
+  const cycle = useMemo(() => cycleFor(todayISO(), cycleStartDay), [cycleStartDay]);
+  const extras = incomesInCycle(data.incomes, cycle);
   const fixed = data.fixedBills.reduce((s, b) => s + b.amount, 0);
-  const free = salary - fixed;
+  const free = salary + extras.toBudget - fixed;
   const allocated = data.categories.reduce((s, c) => s + categoryLimit(c, free), 0);
   const unallocated = free - allocated;
-  const cycle = useMemo(() => cycleFor(todayISO(), cycleStartDay), [cycleStartDay]);
+  const incomes = [...data.incomes].sort((a, b) => b.date.localeCompare(a.date));
   const bills = [...data.fixedBills].sort((a, b) => a.dueDay - b.dueDay);
 
   return (
@@ -56,6 +59,9 @@ export default function PlanScreen() {
 
       <Card>
         <KeyValue label="Salário" value={formatBRL(salary)} />
+        {extras.toBudget > 0 ? (
+          <KeyValue label="Renda extra (este ciclo)" value={`+ ${formatBRL(extras.toBudget)}`} />
+        ) : null}
         <KeyValue label="Contas fixas" value={`− ${formatBRL(fixed)}`} />
         <KeyValue label="Livre para dividir" value={formatBRL(free)} strong />
         <KeyValue label="Distribuído nas categorias" value={formatBRL(allocated)} />
@@ -65,6 +71,37 @@ export default function PlanScreen() {
           strong
           color={unallocated >= 0 ? theme.success : theme.danger}
         />
+      </Card>
+
+      <SectionHeader
+        title="Renda extra"
+        action={<Button label="＋ Adicionar" variant="ghost" compact onPress={() => router.push('/income')} />}
+      />
+      <Card>
+        {incomes.length === 0 ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            Freelas, 13º, vale-refeição, bônus... Você escolhe se soma no livre do ciclo ou vai direto para a
+            poupança.
+          </ThemedText>
+        ) : (
+          incomes.map((income) => {
+            const when =
+              income.recurrence === 'monthly'
+                ? `Todo dia ${parseISO(income.date).d}${income.endDate ? ' (encerrada)' : ''}`
+                : formatShort(income.date);
+            return (
+              <ListItem
+                key={income.id}
+                title={income.description}
+                subtitle={`${incomeKindLabel(income.kind)} · ${when} · ${
+                  income.destination === 'savings' ? 'poupança' : 'soma no livre'
+                }`}
+                right={`+ ${formatBRL(income.amount)}`}
+                onPress={() => router.push({ pathname: '/income', params: { id: income.id } })}
+              />
+            );
+          })
+        )}
       </Card>
 
       <SectionHeader

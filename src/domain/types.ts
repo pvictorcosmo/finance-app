@@ -11,7 +11,7 @@ export type ID = string;
 export type ISODate = string;
 export type Cents = number;
 
-interface Entity {
+export interface Entity {
   id: ID;
   createdAt: string;
   updatedAt: string;
@@ -22,6 +22,8 @@ export interface Settings {
   salary: Cents;
   /** Dia em que o ciclo financeiro começa (1–31; em meses curtos usa o último dia). */
   cycleStartDay: number;
+  /** Quando o app começou a ser usado: a poupança e o histórico contam a partir daqui. */
+  startedAt: ISODate;
 }
 
 export type LimitType = 'amount' | 'percent';
@@ -63,11 +65,63 @@ export interface CreditCard extends Entity {
 
 export interface Expense extends Entity {
   description: string;
+  /** Valor total da compra (somando todas as parcelas). */
   amount: Cents;
   /** Data da compra (ou data planejada, se futura). */
   date: ISODate;
   categoryId: ID;
   payment: PaymentMethod;
+  /** Número de parcelas no cartão de crédito (1 = à vista). */
+  installments?: number;
+}
+
+export type IncomeKind = 'freela' | 'thirteenth' | 'meal' | 'bonus' | 'other';
+/** budget = soma no valor livre do ciclo; savings = vai direto para a poupança. */
+export type IncomeDestination = 'budget' | 'savings';
+
+/** Renda além do salário: freela, 13º, vale-refeição, bônus... */
+export interface Income extends Entity {
+  description: string;
+  amount: Cents;
+  kind: IncomeKind;
+  recurrence: 'once' | 'monthly';
+  /** 'once': dia em que recebe. 'monthly': a partir de quando (o dia do mês se repete). */
+  date: ISODate;
+  /** Só para 'monthly': último dia em que ainda conta (renda encerrada). */
+  endDate?: ISODate;
+  destination: IncomeDestination;
+}
+
+/** Dinheiro que alguém te deve. */
+export interface Receivable extends Entity {
+  person: string;
+  description: string;
+  /** Valor total devido. */
+  amount: Cents;
+  /** Quando você emprestou / pagou pela pessoa. */
+  lentDate: ISODate;
+  /** Quando vence o (primeiro) pagamento. */
+  firstDue: ISODate;
+  /** Em quantas vezes a pessoa vai pagar (1 por mês a partir de firstDue). */
+  installments: number;
+  /** Parcelas recebidas: índice da parcela -> data em que recebeu. */
+  received: Record<number, ISODate>;
+}
+
+/** Categoria como estava num ciclo fechado. */
+export type PlanCategory = Pick<Category, 'id' | 'name' | 'color' | 'limitType' | 'limitValue'>;
+
+/**
+ * "Foto" do planejamento de um ciclo quando ele termina, para o histórico
+ * não mudar se você alterar o salário ou as contas fixas depois.
+ */
+export interface CycleSnapshot {
+  start: ISODate;
+  end: ISODate;
+  salary: Cents;
+  fixed: Cents;
+  categories: PlanCategory[];
+  closedAt: string;
 }
 
 export interface FinanceData {
@@ -76,6 +130,11 @@ export interface FinanceData {
   fixedBills: FixedBill[];
   cards: CreditCard[];
   expenses: Expense[];
+  incomes: Income[];
+  receivables: Receivable[];
   /** Contas fixas marcadas como pagas, por ciclo: { [inícioDoCiclo]: billIds[] }. */
   fixedPaid: Record<ISODate, ID[]>;
+  /** Faturas pagas: { [cardId]: datasDeVencimento[] }. */
+  invoicePaid: Record<ID, ISODate[]>;
+  snapshots: CycleSnapshot[];
 }

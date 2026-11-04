@@ -4,11 +4,15 @@ import { StyleSheet } from 'react-native';
 
 import { MonthCalendar, type DayMarkers } from '@/components/month-calendar';
 import { ThemedText } from '@/components/themed-text';
-import { Card, EmptyState, Fab, KeyValue, ListItem, Row, Screen, SectionHeader } from '@/components/ui';
-import { addMonths, clampDay, formatLong, MONTHS, parseISO, todayISO, toISO, type YM } from '@/domain/dates';
+import { Badge, Card, Dot, EmptyState, Fab, KeyValue, ListItem, Row, Screen, SectionHeader } from '@/components/ui';
+import { incomeDateInCycle } from '@/domain/budget';
+import { allCharges } from '@/domain/charges';
+import { addMonths, clampDay, daysInMonth, formatLong, MONTHS, parseISO, todayISO, toISO, type YM } from '@/domain/dates';
 import { buildInvoice, invoiceDatesForDueMonth, type Invoice } from '@/domain/invoice';
+import { incomeKindLabel } from '@/domain/labels';
 import { formatBRL } from '@/domain/money';
 import { paymentLabel } from '@/domain/payment';
+import { allReceivableInstallments } from '@/domain/receivables';
 import type { CreditCard, ISODate } from '@/domain/types';
 import { useTheme } from '@/hooks/use-theme';
 import { useFinanceData } from '@/store/finance-store';
@@ -21,32 +25,53 @@ export default function CalendarScreen() {
   const [selected, setSelected] = useState<ISODate>(today);
 
   const monthPrefix = `${month.y}-${String(month.m).padStart(2, '0')}`;
-
-  const monthExpenses = useMemo(
-    () => data.expenses.filter((e) => e.date.startsWith(monthPrefix)),
-    [data.expenses, monthPrefix],
+  const monthRange = useMemo(
+    () => ({
+      start: toISO({ y: month.y, m: month.m, d: 1 }),
+      end: toISO({ y: month.y, m: month.m, d: daysInMonth(month.y, month.m) }),
+      days: daysInMonth(month.y, month.m),
+    }),
+    [month],
   );
 
-  // Contas fixas que vencem neste mês.
+  const charges = useMemo(() => allCharges(data.expenses, data.cards), [data.expenses, data.cards]);
+  const monthCharges = useMemo(() => charges.filter((c) => c.date.startsWith(monthPrefix)), [charges, monthPrefix]);
+
   const monthBills = useMemo(
     () => data.fixedBills.map((bill) => ({ bill, date: toISO(clampDay(month.y, month.m, bill.dueDay)) })),
     [data.fixedBills, month],
   );
 
-  // Faturas de cartão que vencem neste mês, e fechamentos que acontecem nele.
+  // incomeDateInCycle funciona com qualquer intervalo de datas; aqui, o mês do calendário.
+  const monthIncomes = useMemo(
+    () =>
+      data.incomes
+        .map((income) => ({ income, date: incomeDateInCycle(income, monthRange) }))
+        .filter((x): x is { income: (typeof data.incomes)[number]; date: ISODate } => x.date !== null),
+    [data, monthRange],
+  );
+
+  const monthReceivables = useMemo(
+    () => allReceivableInstallments(data.receivables, today).filter((i) => i.due.startsWith(monthPrefix)),
+    [data.receivables, today, monthPrefix],
+  );
+
+  // Faturas que vencem neste mês, e fechamentos que acontecem nele.
   const monthInvoices = useMemo(() => {
     const due: { card: CreditCard; invoice: Invoice }[] = [];
     const closings: { card: CreditCard; date: ISODate }[] = [];
     for (const card of data.cards) {
-      due.push({ card, invoice: buildInvoice(card, month, data.expenses, data.fixedBills, today) });
-      // A fatura que fecha neste mês vence neste mês ou no próximo.
+      due.push({
+        card,
+        invoice: buildInvoice(card, month, charges, data.fixedBills, today, data.invoicePaid[card.id]),
+      });
       for (const k of [0, 1]) {
-        const inv = invoiceDatesForDueMonth(card, addMonths(month, k));
-        if (inv.closing.startsWith(monthPrefix)) closings.push({ card, date: inv.closing });
+        const dates = invoiceDatesForDueMonth(card, addMonths(month, k));
+        if (dates.closing.startsWith(monthPrefix)) closings.push({ card, date: dates.closing });
       }
     }
     return { due, closings };
-  }, [data.cards, data.expenses, data.fixedBills, month, monthPrefix, today]);
+  }, [data.cards, data.fixedBills, data.invoicePaid, charges, month, monthPrefix, today]);
 
   const markers = useMemo(() => {
     const m: DayMarkers = {};
@@ -56,20 +81,30 @@ export default function CalendarScreen() {
     };
     for (const { invoice, card } of monthInvoices.due) if (invoice.total > 0) add(invoice.due, card.color);
     for (const { date } of monthBills) add(date, theme.warning);
-    for (const e of monthExpenses) {
-      add(e.date, data.categories.find((c) => c.id === e.categoryId)?.color ?? theme.textSecondary);
+    for (const { date } of monthIncomes) add(date, theme.success);
+    for (const r of monthReceivables) if (r.status !== 'received') add(r.due, theme.success);
+    for (const c of monthCharges) {
+      add(c.date, data.categories.find((cat) => cat.id === c.categoryId)?.color ?? theme.textSecondary);
     }
     return m;
-  }, [monthExpenses, monthBills, monthInvoices, data.categories, theme]);
+  }, [monthCharges, monthBills, monthIncomes, monthReceivables, monthInvoices, data.categories, theme]);
 
-  const dayExpenses = monthExpenses.filter((e) => e.date === selected);
+  const dayCharges = monthCharges.filter((c) => c.date === selected);
   const dayBills = monthBills.filter((b) => b.date === selected);
+  const dayIncomes = monthIncomes.filter((i) => i.date === selected);
+  const dayReceivables = monthReceivables.filter((r) => r.due === selected);
   const dayInvoices = monthInvoices.due.filter((d) => d.invoice.due === selected && d.invoice.total > 0);
   const dayClosings = monthInvoices.closings.filter((c) => c.date === selected);
-  const nothing = !dayExpenses.length && !dayBills.length && !dayInvoices.length && !dayClosings.length;
+  const nothing =
+    !dayCharges.length &&
+    !dayBills.length &&
+    !dayIncomes.length &&
+    !dayReceivables.length &&
+    !dayInvoices.length &&
+    !dayClosings.length;
 
-  const monthTotal = monthExpenses.reduce((s, e) => s + e.amount, 0);
-  const dayTotal = dayExpenses.reduce((s, e) => s + e.amount, 0);
+  const monthTotal = monthCharges.reduce((s, c) => s + c.amount, 0);
+  const dayTotal = dayCharges.reduce((s, c) => s + c.amount, 0);
 
   return (
     <Screen
@@ -78,7 +113,10 @@ export default function CalendarScreen() {
       <Card>
         <MonthCalendar
           month={month}
-          onChangeMonth={setMonth}
+          onChangeMonth={(m) => {
+            setMonth(m);
+            setSelected(toISO(clampDay(m.y, m.m, parseISO(selected).d)));
+          }}
           selected={selected}
           onSelect={setSelected}
           markers={markers}
@@ -86,10 +124,13 @@ export default function CalendarScreen() {
         <KeyValue label={`Gastos em ${MONTHS[month.m - 1].toLowerCase()}`} value={formatBRL(monthTotal)} strong />
       </Card>
 
-      <SectionHeader title={formatLong(selected)} action={dayTotal > 0 ? <ThemedText type="smallBold">{formatBRL(dayTotal)}</ThemedText> : undefined} />
+      <SectionHeader
+        title={formatLong(selected)}
+        action={dayTotal > 0 ? <ThemedText type="smallBold">{formatBRL(dayTotal)}</ThemedText> : undefined}
+      />
 
       {nothing ? (
-        <EmptyState text={selected > today ? 'Nada agendado para este dia.' : 'Nenhum gasto neste dia.'} />
+        <EmptyState text={selected > today ? 'Nada agendado para este dia.' : 'Nada neste dia.'} />
       ) : (
         <Card>
           {dayInvoices.map(({ card, invoice }) => (
@@ -97,7 +138,7 @@ export default function CalendarScreen() {
               key={`inv-${card.id}`}
               color={card.color}
               title={`Fatura ${card.name}`}
-              subtitle={`Vencimento · ${invoice.items.length} lançamento(s)`}
+              subtitle={`${invoice.paid ? '✓ Paga' : invoice.overdue ? '! Atrasada' : 'Vencimento'} · ${invoice.items.length} lançamento(s)`}
               right={formatBRL(invoice.total)}
               onPress={() => router.navigate('/cards')}
             />
@@ -106,8 +147,30 @@ export default function CalendarScreen() {
             <ListItem
               key={`close-${card.id}`}
               color={card.color}
-              title={`Fatura ${card.name} fecha hoje`}
-              subtitle="Compras a partir de hoje vão para a próxima fatura"
+              title={`Fatura ${card.name} fecha neste dia`}
+              subtitle="Compras a partir daqui vão para a próxima fatura"
+            />
+          ))}
+          {dayIncomes.map(({ income }) => (
+            <ListItem
+              key={`inc-${income.id}`}
+              color={theme.success}
+              title={`+ ${income.description}`}
+              subtitle={`${incomeKindLabel(income.kind)} · ${income.destination === 'savings' ? 'vai para a poupança' : 'soma no livre'}`}
+              right={formatBRL(income.amount)}
+              onPress={() => router.push({ pathname: '/income', params: { id: income.id } })}
+            />
+          ))}
+          {dayReceivables.map((r) => (
+            <ListItem
+              key={`rec-${r.receivable.id}-${r.index}`}
+              color={theme.success}
+              title={`${r.receivable.person} te paga`}
+              subtitle={`${r.receivable.description}${r.count > 1 ? ` (${r.index + 1}/${r.count})` : ''} · ${
+                r.status === 'received' ? '✓ recebido' : r.status === 'overdue' ? '! atrasado' : 'a receber'
+              }`}
+              right={formatBRL(r.amount)}
+              onPress={() => router.navigate('/receivables')}
             />
           ))}
           {dayBills.map(({ bill }) => (
@@ -120,16 +183,16 @@ export default function CalendarScreen() {
               onPress={() => router.push({ pathname: '/fixed-bill', params: { id: bill.id } })}
             />
           ))}
-          {dayExpenses.map((e) => {
-            const cat = data.categories.find((c) => c.id === e.categoryId);
+          {dayCharges.map((c) => {
+            const cat = data.categories.find((x) => x.id === c.categoryId);
             return (
               <ListItem
-                key={e.id}
+                key={c.id}
                 color={cat?.color ?? theme.textSecondary}
-                title={e.description}
-                subtitle={`${cat?.name ?? 'Sem categoria'} · ${paymentLabel(e.payment, data.cards)}`}
-                right={formatBRL(e.amount)}
-                onPress={() => router.push({ pathname: '/expense', params: { id: e.id } })}
+                title={c.description}
+                subtitle={`${cat?.name ?? 'Sem categoria'} · ${paymentLabel(c.payment, data.cards)}${c.index > 0 ? ' · parcela' : ''}`}
+                right={formatBRL(c.amount)}
+                onPress={() => router.push({ pathname: '/expense', params: { id: c.expenseId } })}
               />
             );
           })}
@@ -138,7 +201,10 @@ export default function CalendarScreen() {
 
       <Row style={styles.legend}>
         <Legend color={theme.warning} label="Conta fixa" />
-        <Legend color={theme.primary} label="Gastos (cor da categoria)" />
+        <Legend color={theme.success} label="Entradas e devedores" />
+        <Row>
+          <Badge tone="neutral" label="Gastos na cor da categoria" />
+        </Row>
       </Row>
     </Screen>
   );
@@ -147,7 +213,7 @@ export default function CalendarScreen() {
 function Legend({ color, label }: { color: string; label: string }) {
   return (
     <Row>
-      <ThemedText style={{ color }}>●</ThemedText>
+      <Dot color={color} size={8} />
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>

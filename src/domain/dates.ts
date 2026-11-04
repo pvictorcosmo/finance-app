@@ -17,7 +17,8 @@ export const MONTHS = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ];
-export const WEEKDAYS_SHORT = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+export const MONTHS_SHORT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+export const WEEKDAYS_SHORT =['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 const WEEKDAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
 export function toISO({ y, m, d }: YMD): ISODate {
@@ -46,6 +47,19 @@ export function clampDay(y: number, m: number, d: number): YMD {
 export function addMonths({ y, m }: YM, n: number): YM {
   const t = y * 12 + (m - 1) + n;
   return { y: Math.floor(t / 12), m: (((t % 12) + 12) % 12) + 1 };
+}
+
+/** Mesma data `n` meses depois (usa o último dia em meses mais curtos). */
+export function addMonthsISO(iso: ISODate, n: number): ISODate {
+  const p = parseISO(iso);
+  const ym = addMonths(p, n);
+  return toISO(clampDay(ym.y, ym.m, p.d));
+}
+
+/** "nov/26" */
+export function formatMonthYear(iso: ISODate): string {
+  const { y, m } = parseISO(iso);
+  return `${MONTHS_SHORT[m - 1]}/${String(y).slice(2)}`;
 }
 
 function toUTC(iso: ISODate): number {

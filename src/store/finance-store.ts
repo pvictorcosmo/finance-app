@@ -1,16 +1,24 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { LEGACY_COLORS, SERIES_COLORS } from '@/constants/series-colors';
+import { livePlan } from '@/domain/budget';
+import { cycleFor, shiftCycle } from '@/domain/cycle';
+import { todayISO } from '@/domain/dates';
 import type {
   Category,
   CreditCard,
+  CycleSnapshot,
+  Entity,
   Expense,
   FinanceData,
   FixedBill,
   ID,
+  Income,
   ISODate,
+  Receivable,
 } from '@/domain/types';
 
 /**
@@ -19,7 +27,7 @@ import type {
  * abaixo — as telas só falam com este store.
  */
 
-type Draft<T> = Omit<T, 'id' | 'createdAt' | 'updatedAt'> & { id?: ID };
+type Draft<T> = Omit<T, keyof Entity> & { id?: ID };
 
 interface FinanceActions {
   setSalary: (cents: number) => void;
@@ -32,15 +40,21 @@ interface FinanceActions {
   deleteCard: (id: ID) => void;
   saveExpense: (draft: Draft<Expense>) => void;
   deleteExpense: (id: ID) => void;
+  saveIncome: (draft: Draft<Income>) => void;
+  deleteIncome: (id: ID) => void;
+  saveReceivable: (draft: Draft<Receivable>) => void;
+  deleteReceivable: (id: ID) => void;
+  /** Marca/desmarca uma parcela de um devedor como recebida. */
+  toggleReceived: (id: ID, index: number, date: ISODate) => void;
   toggleFixedPaid: (cycleStart: ISODate, billId: ID) => void;
+  toggleInvoicePaid: (cardId: ID, due: ISODate) => void;
+  /** Salva a "foto" dos ciclos que já terminaram (para histórico e poupança). */
+  closeCycles: (today: ISODate) => void;
 }
 
 export type FinanceState = FinanceData & FinanceActions;
 
-export const CATEGORY_COLORS = [
-  '#208AEF', '#30A46C', '#F76B15', '#E5484D', '#8E4EC6',
-  '#D6409F', '#12A594', '#FFB224', '#6E56CF', '#5B5BD6',
-];
+export const CATEGORY_COLORS: readonly string[] = SERIES_COLORS;
 
 export function newId(): ID {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -48,16 +62,18 @@ export function newId(): ID {
 
 const nowStamp = () => new Date().toISOString();
 
-function upsert<T extends { id: ID; createdAt: string; updatedAt: string }>(
-  list: T[],
-  draft: Draft<T>,
-): T[] {
+function upsert<T extends Entity>(list: T[], draft: Draft<T>): T[] {
   const now = nowStamp();
   const existing = draft.id ? list.find((x) => x.id === draft.id) : undefined;
   if (existing) {
     return list.map((x) => (x.id === existing.id ? ({ ...existing, ...draft, updatedAt: now } as T) : x));
   }
   return [...list, { ...draft, id: newId(), createdAt: now, updatedAt: now } as T];
+}
+
+function toggleIn<T>(list: T[] | undefined, value: T): T[] {
+  const current = list ?? [];
+  return current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
 }
 
 function seed(): FinanceData {
@@ -72,23 +88,27 @@ function seed(): FinanceData {
     updatedAt: now,
   });
   return {
-    settings: { salary: 0, cycleStartDay: 1 },
+    settings: { salary: 0, cycleStartDay: 1, startedAt: todayISO() },
     categories: [
-      cat('Dia a dia', CATEGORY_COLORS[0], 40),
-      cat('Lazer', CATEGORY_COLORS[4], 20),
-      cat('Almoço', CATEGORY_COLORS[2], 25),
-      cat('Uber', CATEGORY_COLORS[1], 15),
+      cat('Dia a dia', SERIES_COLORS[0], 40),
+      cat('Lazer', SERIES_COLORS[6], 20),
+      cat('Almoço', SERIES_COLORS[1], 25),
+      cat('Uber', SERIES_COLORS[2], 15),
     ],
     fixedBills: [],
     cards: [],
     expenses: [],
+    incomes: [],
+    receivables: [],
     fixedPaid: {},
+    invoicePaid: {},
+    snapshots: [],
   };
 }
 
 export const useFinance = create<FinanceState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...seed(),
 
       setSalary: (salary) => set((s) => ({ settings: { ...s.settings, salary } })),
@@ -106,25 +126,78 @@ export const useFinance = create<FinanceState>()(
       saveExpense: (draft) => set((s) => ({ expenses: upsert(s.expenses, draft) })),
       deleteExpense: (id) => set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) })),
 
+      saveIncome: (draft) => set((s) => ({ incomes: upsert(s.incomes, draft) })),
+      deleteIncome: (id) => set((s) => ({ incomes: s.incomes.filter((i) => i.id !== id) })),
+
+      saveReceivable: (draft) => set((s) => ({ receivables: upsert(s.receivables, draft) })),
+      deleteReceivable: (id) => set((s) => ({ receivables: s.receivables.filter((r) => r.id !== id) })),
+      toggleReceived: (id, index, date) =>
+        set((s) => ({
+          receivables: s.receivables.map((r) => {
+            if (r.id !== id) return r;
+            const received = { ...r.received };
+            if (received[index]) delete received[index];
+            else received[index] = date;
+            return { ...r, received, updatedAt: nowStamp() };
+          }),
+        })),
+
       toggleFixedPaid: (cycleStart, billId) =>
-        set((s) => {
-          const paid = s.fixedPaid[cycleStart] ?? [];
-          const next = paid.includes(billId) ? paid.filter((id) => id !== billId) : [...paid, billId];
-          return { fixedPaid: { ...s.fixedPaid, [cycleStart]: next } };
-        }),
+        set((s) => ({ fixedPaid: { ...s.fixedPaid, [cycleStart]: toggleIn(s.fixedPaid[cycleStart], billId) } })),
+      toggleInvoicePaid: (cardId, due) =>
+        set((s) => ({ invoicePaid: { ...s.invoicePaid, [cardId]: toggleIn(s.invoicePaid[cardId], due) } })),
+
+      closeCycles: (today) => {
+        const s = get();
+        const startDay = s.settings.cycleStartDay;
+        const have = new Set(s.snapshots.map((x) => x.start));
+        const plan = livePlan(s);
+        const added: CycleSnapshot[] = [];
+        let c = cycleFor(s.settings.startedAt, startDay);
+        for (let i = 0; c.end < today && i < 120; i++, c = shiftCycle(c, startDay, 1)) {
+          if (have.has(c.start)) continue;
+          added.push({
+            start: c.start,
+            end: c.end,
+            salary: plan.salary,
+            fixed: plan.fixed,
+            categories: plan.categories,
+            closedAt: nowStamp(),
+          });
+        }
+        if (added.length) set({ snapshots: [...s.snapshots, ...added] });
+      },
     }),
     {
       name: 'finance-app/data',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: ({ settings, categories, fixedBills, cards, expenses, fixedPaid }): FinanceData => ({
-        settings,
-        categories,
-        fixedBills,
-        cards,
-        expenses,
-        fixedPaid,
+      partialize: (s): FinanceData => ({
+        settings: s.settings,
+        categories: s.categories,
+        fixedBills: s.fixedBills,
+        cards: s.cards,
+        expenses: s.expenses,
+        incomes: s.incomes,
+        receivables: s.receivables,
+        fixedPaid: s.fixedPaid,
+        invoicePaid: s.invoicePaid,
+        snapshots: s.snapshots,
       }),
+      migrate: (persisted, version) => {
+        const data = persisted as FinanceData;
+        if (version < 2) {
+          const recolor = <T extends { color: string }>(x: T): T => ({ ...x, color: LEGACY_COLORS[x.color] ?? x.color });
+          data.settings = { ...data.settings, startedAt: data.settings.startedAt ?? todayISO() };
+          data.categories = data.categories.map(recolor);
+          data.cards = data.cards.map(recolor);
+          data.incomes ??= [];
+          data.receivables ??= [];
+          data.invoicePaid ??= {};
+          data.snapshots ??= [];
+        }
+        return data;
+      },
     },
   ),
 );
@@ -136,8 +209,15 @@ export function useFinanceData(): FinanceData {
   const fixedBills = useFinance((s) => s.fixedBills);
   const cards = useFinance((s) => s.cards);
   const expenses = useFinance((s) => s.expenses);
+  const incomes = useFinance((s) => s.incomes);
+  const receivables = useFinance((s) => s.receivables);
   const fixedPaid = useFinance((s) => s.fixedPaid);
-  return { settings, categories, fixedBills, cards, expenses, fixedPaid };
+  const invoicePaid = useFinance((s) => s.invoicePaid);
+  const snapshots = useFinance((s) => s.snapshots);
+  return useMemo(
+    () => ({ settings, categories, fixedBills, cards, expenses, incomes, receivables, fixedPaid, invoicePaid, snapshots }),
+    [settings, categories, fixedBills, cards, expenses, incomes, receivables, fixedPaid, invoicePaid, snapshots],
+  );
 }
 
 /** true depois que os dados salvos no aparelho foram carregados. */

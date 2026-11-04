@@ -27,6 +27,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf={{ default: 'creditcard', selected: 'creditcard.fill' }} md="credit_card" />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="receivables">
+        <NativeTabs.Trigger.Label>Devedores</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'person.2', selected: 'person.2.fill' }} md="group" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="plan">
         <NativeTabs.Trigger.Label>Planejar</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="slider.horizontal.3" md="tune" />

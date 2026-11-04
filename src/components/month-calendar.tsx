@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Row } from '@/components/ui';
+import { useSeriesColor } from '@/constants/series-colors';
 import { Spacing } from '@/constants/theme';
 import { addMonths, daysInMonth, MONTHS, todayISO, toISO, weekday, WEEKDAYS_SHORT, type YM } from '@/domain/dates';
 import type { ISODate } from '@/domain/types';
@@ -24,6 +25,7 @@ export function MonthCalendar({
   markers?: DayMarkers;
 }) {
   const theme = useTheme();
+  const series = useSeriesColor();
   const today = todayISO();
   const first = toISO({ y: month.y, m: month.m, d: 1 });
   const lead = weekday(first);
@@ -90,7 +92,7 @@ export function MonthCalendar({
               </View>
               <View style={styles.dots}>
                 {dots.slice(0, 3).map((c, j) => (
-                  <View key={j} style={[styles.dot, { backgroundColor: c }]} />
+                  <View key={j} style={[styles.dot, { backgroundColor: series(c) }]} />
                 ))}
               </View>
             </Pressable>

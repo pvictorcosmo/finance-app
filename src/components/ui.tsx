@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TextInput,
   View,
+  type StyleProp,
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
@@ -12,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useSeriesColor } from '@/constants/series-colors';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -61,7 +63,7 @@ export function FormScreen({ children }: { children: ReactNode }) {
   );
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
+export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <ThemedView type="backgroundElement" style={[styles.card, style]}>
       {children}
@@ -69,7 +71,7 @@ export function Card({ children, style }: { children: ReactNode; style?: ViewSty
   );
 }
 
-export function Row({ children, style }: { children: ReactNode; style?: ViewStyle }) {
+export function Row({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   return <View style={[styles.row, style]}>{children}</View>;
 }
 
@@ -85,7 +87,8 @@ export function SectionHeader({ title, action }: { title: string; action?: React
 }
 
 export function Dot({ color, size = 10 }: { color: string; size?: number }) {
-  return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />;
+  const series = useSeriesColor();
+  return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: series(color) }} />;
 }
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
@@ -235,33 +238,46 @@ export function Chips<T extends string>({
   );
 }
 
-/** Seletor de dia do mês (1–31) com − e +. */
+/** Seletor numérico com − e + (por padrão: dia do mês, 1–31, circular). */
 export function DayStepper({
   label,
   value,
   onChange,
   hint,
+  min = 1,
+  max = 31,
+  format = (v) => `Dia ${v}`,
 }: {
   label: string;
   value: number;
-  onChange: (day: number) => void;
+  onChange: (value: number) => void;
   hint?: string;
+  min?: number;
+  max?: number;
+  format?: (value: number) => string;
 }) {
   const theme = useTheme();
-  const step = (n: number) => onChange(((value - 1 + n + 31) % 31) + 1);
+  const size = max - min + 1;
+  const step = (n: number) => onChange(((value - min + n + size) % size) + min);
   return (
     <View style={styles.field}>
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
       <Row style={styles.stepper}>
-        <Pressable onPress={() => step(-1)} style={[styles.stepBtn, { backgroundColor: theme.backgroundSelected }]}>
+        <Pressable
+          accessibilityLabel="Diminuir"
+          onPress={() => step(-1)}
+          style={[styles.stepBtn, { backgroundColor: theme.backgroundSelected }]}>
           <ThemedText type="smallBold">−</ThemedText>
         </Pressable>
         <ThemedText type="default" style={styles.stepValue}>
-          Dia {value}
+          {format(value)}
         </ThemedText>
-        <Pressable onPress={() => step(1)} style={[styles.stepBtn, { backgroundColor: theme.backgroundSelected }]}>
+        <Pressable
+          accessibilityLabel="Aumentar"
+          onPress={() => step(1)}
+          style={[styles.stepBtn, { backgroundColor: theme.backgroundSelected }]}>
           <ThemedText type="smallBold">＋</ThemedText>
         </Pressable>
       </Row>
@@ -270,6 +286,40 @@ export function DayStepper({
           {hint}
         </ThemedText>
       ) : null}
+    </View>
+  );
+}
+
+/** Caixinha de marcar (pago/recebido). */
+export function Checkbox({ checked, onPress, label }: { checked: boolean; onPress: () => void; label: string }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+      accessibilityLabel={label}
+      hitSlop={8}
+      onPress={onPress}
+      style={[
+        styles.check,
+        { borderColor: checked ? theme.success : theme.border },
+        checked && { backgroundColor: theme.success },
+      ]}>
+      {checked ? <ThemedText style={{ color: theme.onPrimary }}>✓</ThemedText> : null}
+    </Pressable>
+  );
+}
+
+/** Etiqueta de status com ícone + texto (nunca só cor). */
+export function Badge({ tone, label }: { tone: 'success' | 'warning' | 'danger' | 'neutral'; label: string }) {
+  const theme = useTheme();
+  const color = tone === 'neutral' ? theme.textSecondary : theme[tone];
+  const icon = { success: '✓', warning: '!', danger: '!', neutral: '•' }[tone];
+  return (
+    <View style={[styles.badge, { borderColor: color }]}>
+      <ThemedText type="small" style={{ color }}>
+        {icon} {label}
+      </ThemedText>
     </View>
   );
 }
@@ -288,10 +338,11 @@ export function ProgressBar({
   marker?: number;
 }) {
   const theme = useTheme();
+  const series = useSeriesColor();
   const ratio = max > 0 ? Math.min(1, value / max) : value > 0 ? 1 : 0;
   return (
     <View style={[styles.track, { backgroundColor: theme.backgroundSelected }]}>
-      <View style={[styles.fill, { width: `${ratio * 100}%`, backgroundColor: color }]} />
+      <View style={[styles.fill, { width: `${ratio * 100}%`, backgroundColor: series(color) }]} />
       {marker !== undefined && marker > 0 && marker < 1 ? (
         <View style={[styles.marker, { left: `${marker * 100}%`, backgroundColor: theme.text }]} />
       ) : null}
@@ -424,6 +475,8 @@ const styles = StyleSheet.create({
   stepper: { gap: Spacing.three },
   stepBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   stepValue: { minWidth: 70, textAlign: 'center' },
+  check: { width: 28, height: 28, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  badge: { borderWidth: 1, borderRadius: 10, paddingHorizontal: Spacing.two, alignSelf: 'flex-start' },
   track: { height: 10, borderRadius: 5, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 5 },
   marker: { position: 'absolute', top: 0, bottom: 0, width: 2, opacity: 0.6 },

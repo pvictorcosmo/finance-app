@@ -1,5 +1,6 @@
+import type { Charge } from './charges';
 import { addMonths, clampDay, parseISO, toISO, type YM } from './dates';
-import type { Cents, CreditCard, Expense, FixedBill, ID, ISODate } from './types';
+import type { Cents, CreditCard, FixedBill, ID, ISODate } from './types';
 
 export interface InvoiceDates {
   /** Dia em que a fatura fecha (compras a partir deste dia vão para a próxima). */
@@ -9,13 +10,15 @@ export interface InvoiceDates {
 
 export interface InvoiceItem {
   id: ID;
+  /** Compra de origem (para abrir a edição). */
+  expenseId?: ID;
   description: string;
   amount: Cents;
   date: ISODate;
   source: 'expense' | 'fixed';
 }
 
-/** closed = já fechou e falta pagar; open = recebendo compras agora; future = próximas. */
+/** closed = já fechou e falta pagar; open = recebendo compras agora; future = próximas; past = vencida. */
 export type InvoiceStatus = 'closed' | 'open' | 'future' | 'past';
 
 export interface Invoice extends InvoiceDates {
@@ -23,6 +26,9 @@ export interface Invoice extends InvoiceDates {
   total: Cents;
   items: InvoiceItem[];
   status: InvoiceStatus;
+  paid: boolean;
+  /** Venceu, tinha valor e não foi marcada como paga. */
+  overdue: boolean;
 }
 
 type CardDays = Pick<CreditCard, 'closingDay' | 'dueDay'>;
@@ -47,13 +53,14 @@ export function invoiceForPurchase(card: CardDays, purchase: ISODate): InvoiceDa
   return invoiceDatesForDueMonth(card, dueMonth);
 }
 
-/** Monta a fatura de um cartão que vence no mês `dueMonth`, com compras e contas fixas. */
+/** Monta a fatura de um cartão que vence no mês `dueMonth`, com compras/parcelas e contas fixas. */
 export function buildInvoice(
   card: CreditCard,
   dueMonth: YM,
-  expenses: Expense[],
+  charges: Charge[],
   fixedBills: FixedBill[],
   today: ISODate,
+  paidDues: ISODate[] = [],
 ): Invoice {
   const dates = invoiceDatesForDueMonth(card, dueMonth);
   const current = invoiceForPurchase(card, today);
@@ -67,16 +74,22 @@ export function buildInvoice(
           : 'past';
 
   const items: InvoiceItem[] = [];
-  const belongs = (date: ISODate) => invoiceForPurchase(card, date).due === dates.due;
-
-  for (const e of expenses) {
-    if (e.payment.kind === 'credit' && e.payment.cardId === card.id && belongs(e.date)) {
-      items.push({ id: e.id, description: e.description, amount: e.amount, date: e.date, source: 'expense' });
+  for (const c of charges) {
+    if (c.payment.kind === 'credit' && c.payment.cardId === card.id && c.invoiceDue === dates.due) {
+      items.push({
+        id: c.id,
+        expenseId: c.expenseId,
+        description: c.description,
+        amount: c.amount,
+        date: c.date,
+        source: 'expense',
+      });
     }
   }
 
   // Contas fixas no cartão: uma cobrança por mês no dia de vencimento, a partir do cadastro.
   const closing = parseISO(dates.closing);
+  const belongs = (date: ISODate) => invoiceForPurchase(card, date).due === dates.due;
   for (const bill of fixedBills) {
     if (bill.payment.kind !== 'credit' || bill.payment.cardId !== card.id) continue;
     const since = bill.createdAt.slice(0, 10);
@@ -89,31 +102,36 @@ export function buildInvoice(
   }
 
   items.sort((a, b) => b.date.localeCompare(a.date));
+  const total = items.reduce((sum, i) => sum + i.amount, 0);
+  const paid = paidDues.includes(dates.due);
   return {
     ...dates,
     cardId: card.id,
     status,
     items,
-    total: items.reduce((sum, i) => sum + i.amount, 0),
+    total,
+    paid,
+    overdue: status === 'past' && !paid && total > 0,
   };
 }
 
 /**
- * Faturas que ainda vão ser pagas: a fechada (se não venceu), a aberta
- * e as próximas `ahead` (podem ter compras futuras ou contas fixas).
+ * Faturas que importam agora: as atrasadas (vencidas e não pagas), a fechada,
+ * a aberta e as próximas `ahead` (podem ter parcelas ou contas fixas).
  */
 export function upcomingInvoices(
   card: CreditCard,
-  expenses: Expense[],
+  charges: Charge[],
   fixedBills: FixedBill[],
   today: ISODate,
+  paidDues: ISODate[] = [],
   ahead = 3,
 ): Invoice[] {
   const currentDue = parseISO(invoiceForPurchase(card, today).due);
   const result: Invoice[] = [];
-  for (let k = -1; k <= ahead; k++) {
-    const inv = buildInvoice(card, addMonths(currentDue, k), expenses, fixedBills, today);
-    if (inv.status !== 'past') result.push(inv);
+  for (let k = -3; k <= ahead; k++) {
+    const inv = buildInvoice(card, addMonths(currentDue, k), charges, fixedBills, today, paidDues);
+    if (inv.status !== 'past' || inv.overdue) result.push(inv);
   }
   return result;
 }
