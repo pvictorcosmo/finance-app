@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Icon } from '@/components/icon';
 import { MonthCalendar } from '@/components/month-calendar';
 import { ThemedText } from '@/components/themed-text';
 import { Card, Row } from '@/components/ui';
@@ -32,7 +33,7 @@ export function DateField({
 
   return (
     <View style={styles.field}>
-      <ThemedText type="small" themeColor="textSecondary">
+      <ThemedText type="caption" themeColor="textSecondary" style={styles.label}>
         {label}
       </ThemedText>
       <Pressable
@@ -40,11 +41,14 @@ export function DateField({
           setMonth(parseISO(value));
           setOpen((o) => !o);
         }}
-        style={[styles.input, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+        style={[styles.input, { backgroundColor: theme.backgroundElement, borderColor: open ? theme.primary : theme.border }]}>
         <ThemedText>{formatLong(value)}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {relativeDays(value, today)} {open ? '▲' : '▼'}
-        </ThemedText>
+        <Row style={styles.trailing}>
+          <ThemedText type="small" themeColor="textSecondary">
+            {relativeDays(value, today)}
+          </ThemedText>
+          <Icon name="calendar" size={18} color={theme.accent} />
+        </Row>
       </Pressable>
       <Row style={styles.shortcuts}>
         {shortcuts.map(([text, date]) => (
@@ -56,9 +60,13 @@ export function DateField({
             }}
             style={[
               styles.shortcut,
-              { borderColor: date === value ? theme.primary : theme.border },
+              date === value
+                ? { backgroundColor: theme.primarySoft, borderColor: theme.primarySoft }
+                : { backgroundColor: theme.backgroundElement, borderColor: theme.border },
             ]}>
-            <ThemedText type="small">{text}</ThemedText>
+            <ThemedText type={date === value ? 'smallBold' : 'small'} style={date === value ? { color: theme.accent } : undefined}>
+              {text}
+            </ThemedText>
           </Pressable>
         ))}
       </Row>
@@ -80,16 +88,18 @@ export function DateField({
 }
 
 const styles = StyleSheet.create({
-  field: { gap: Spacing.one },
+  field: { gap: 6 },
+  label: { textTransform: 'uppercase', letterSpacing: 0.6 },
+  trailing: { gap: Spacing.two },
   input: {
-    minHeight: 48,
-    borderRadius: 12,
-    borderWidth: 1,
+    minHeight: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
     paddingHorizontal: Spacing.three,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   shortcuts: { marginTop: Spacing.one },
-  shortcut: { borderWidth: 1, borderRadius: 16, paddingHorizontal: Spacing.three, paddingVertical: Spacing.one },
+  shortcut: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 6 },
 });

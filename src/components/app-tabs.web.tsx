@@ -12,7 +12,7 @@ export default function AppTabs() {
       <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
         <CustomTabList>
-          <TabTrigger name="index" href="/index" asChild>
+          <TabTrigger name="index" href="/" asChild>
             <TabButton>Resumo</TabButton>
           </TabTrigger>
           <TabTrigger name="calendar" href="/calendar" asChild>

@@ -64,10 +64,11 @@ export function livePlan(data: FinanceData): CyclePlan {
   return {
     salary: data.settings.salary,
     fixed: data.fixedBills.reduce((sum, b) => sum + b.amount, 0),
-    categories: data.categories.map(({ id, name, color, limitType, limitValue }) => ({
+    categories: data.categories.map(({ id, name, color, icon, limitType, limitValue }) => ({
       id,
       name,
       color,
+      icon,
       limitType,
       limitValue,
     })),

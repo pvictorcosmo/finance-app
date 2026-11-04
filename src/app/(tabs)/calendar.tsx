@@ -2,9 +2,10 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet } from 'react-native';
 
+import { categoryIcon } from '@/components/icon';
 import { MonthCalendar, type DayMarkers } from '@/components/month-calendar';
 import { ThemedText } from '@/components/themed-text';
-import { Badge, Card, Dot, EmptyState, Fab, KeyValue, ListItem, Row, Screen, SectionHeader } from '@/components/ui';
+import { Card, Dot, EmptyState, Fab, KeyValue, ListItem, Row, Screen, SectionHeader } from '@/components/ui';
 import { incomeDateInCycle } from '@/domain/budget';
 import { allCharges } from '@/domain/charges';
 import { addMonths, clampDay, daysInMonth, formatLong, MONTHS, parseISO, todayISO, toISO, type YM } from '@/domain/dates';
@@ -136,6 +137,7 @@ export default function CalendarScreen() {
           {dayInvoices.map(({ card, invoice }) => (
             <ListItem
               key={`inv-${card.id}`}
+              icon="card"
               color={card.color}
               title={`Fatura ${card.name}`}
               subtitle={`${invoice.paid ? '✓ Paga' : invoice.overdue ? '! Atrasada' : 'Vencimento'} · ${invoice.items.length} lançamento(s)`}
@@ -146,6 +148,7 @@ export default function CalendarScreen() {
           {dayClosings.map(({ card }) => (
             <ListItem
               key={`close-${card.id}`}
+              icon="clock"
               color={card.color}
               title={`Fatura ${card.name} fecha neste dia`}
               subtitle="Compras a partir daqui vão para a próxima fatura"
@@ -154,6 +157,7 @@ export default function CalendarScreen() {
           {dayIncomes.map(({ income }) => (
             <ListItem
               key={`inc-${income.id}`}
+              icon="income"
               color={theme.success}
               title={`+ ${income.description}`}
               subtitle={`${incomeKindLabel(income.kind)} · ${income.destination === 'savings' ? 'vai para a poupança' : 'soma no livre'}`}
@@ -164,6 +168,7 @@ export default function CalendarScreen() {
           {dayReceivables.map((r) => (
             <ListItem
               key={`rec-${r.receivable.id}-${r.index}`}
+              icon="person"
               color={theme.success}
               title={`${r.receivable.person} te paga`}
               subtitle={`${r.receivable.description}${r.count > 1 ? ` (${r.index + 1}/${r.count})` : ''} · ${
@@ -176,6 +181,7 @@ export default function CalendarScreen() {
           {dayBills.map(({ bill }) => (
             <ListItem
               key={`bill-${bill.id}`}
+              icon="bill"
               color={theme.warning}
               title={bill.name}
               subtitle={`Conta fixa · ${paymentLabel(bill.payment, data.cards)}`}
@@ -188,6 +194,7 @@ export default function CalendarScreen() {
             return (
               <ListItem
                 key={c.id}
+                icon={cat ? categoryIcon(cat) : 'tag'}
                 color={cat?.color ?? theme.textSecondary}
                 title={c.description}
                 subtitle={`${cat?.name ?? 'Sem categoria'} · ${paymentLabel(c.payment, data.cards)}${c.index > 0 ? ' · parcela' : ''}`}
@@ -202,9 +209,7 @@ export default function CalendarScreen() {
       <Row style={styles.legend}>
         <Legend color={theme.warning} label="Conta fixa" />
         <Legend color={theme.success} label="Entradas e devedores" />
-        <Row>
-          <Badge tone="neutral" label="Gastos na cor da categoria" />
-        </Row>
+        <Legend color={theme.accent} label="Gastos (cor da categoria)" />
       </Row>
     </Screen>
   );

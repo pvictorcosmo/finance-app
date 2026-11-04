@@ -31,7 +31,7 @@ export function paymentLabel(p: PaymentMethod, cards: CreditCard[]): string {
 
 export function paymentOptions(cards: CreditCard[]) {
   return [
-    ...cards.map((c) => ({ value: `credit:${c.id}`, label: c.name, color: c.color })),
+    ...cards.map((c) => ({ value: `credit:${c.id}`, label: c.name, color: c.color, icon: 'card' as const })),
     { value: 'debit', label: 'Débito' },
     { value: 'pix', label: 'Pix' },
     { value: 'cash', label: 'Dinheiro' },

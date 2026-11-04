@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Alert } from 'react-native';
 
 import { ColorPicker } from '@/components/color-picker';
+import { categoryIcon, IconPicker } from '@/components/icon-picker';
+import type { IconName } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chips, Field, FormScreen } from '@/components/ui';
 import { categoryLimit } from '@/domain/budget';
@@ -24,6 +26,9 @@ export default function CategoryForm() {
 
   const [name, setName] = useState(existing?.name ?? '');
   const [color, setColor] = useState(existing?.color ?? CATEGORY_COLORS[categories.length % CATEGORY_COLORS.length]);
+  // Sem escolha explícita, o ícone acompanha o nome (ex.: "Uber" -> carro).
+  const [pickedIcon, setPickedIcon] = useState<IconName | undefined>(existing?.icon as IconName | undefined);
+  const icon = pickedIcon ?? categoryIcon({ name });
   const [limitType, setLimitType] = useState<LimitType>(existing?.limitType ?? 'amount');
   const [valueText, setValueText] = useState(() => {
     if (!existing) return '';
@@ -37,7 +42,7 @@ export default function CategoryForm() {
 
   const save = () => {
     if (!valid || parsed === null) return;
-    saveCategory({ id: existing?.id, name: name.trim(), color, limitType, limitValue: parsed });
+    saveCategory({ id: existing?.id, name: name.trim(), color, icon, limitType, limitValue: parsed });
     router.back();
   };
 
@@ -65,6 +70,7 @@ export default function CategoryForm() {
     <FormScreen>
       <Stack.Screen options={{ title: existing ? 'Editar categoria' : 'Nova categoria' }} />
       <Field label="Nome" value={name} onChangeText={setName} placeholder="Ex.: Uber, Mercado, Lazer" />
+      <IconPicker value={icon} color={color} onChange={setPickedIcon} />
       <ColorPicker value={color} onChange={setColor} />
 
       <Chips

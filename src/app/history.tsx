@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ColumnChart, type ColumnDatum } from '@/components/column-chart';
+import { HeroCard, HeroText } from '@/components/hero-card';
 import { ThemedText } from '@/components/themed-text';
 import { Card, Chips, EmptyState, FormScreen, KeyValue, Row, SectionHeader } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
@@ -42,18 +43,16 @@ export default function HistoryScreen() {
 
   return (
     <FormScreen>
-      <Card>
-        <ThemedText type="small" themeColor="textSecondary">
-          Poupança acumulada
-        </ThemedText>
-        <ThemedText type="subtitle" style={{ color: total >= 0 ? theme.text : theme.danger }}>
-          {formatBRL(total)}
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
+      <HeroCard>
+        <HeroText type="caption" dim>
+          POUPANÇA ACUMULADA
+        </HeroText>
+        <HeroText type="title">{formatBRL(total)}</HeroText>
+        <HeroText dim>
           Soma do que sobrou em cada ciclo fechado + rendas que foram direto para a poupança. Gastar mais que o
           livre num ciclo tira da poupança.
-        </ThemedText>
-      </Card>
+        </HeroText>
+      </HeroCard>
 
       {history.length < 2 ? (
         <EmptyState text="Os gráficos de comparação aparecem depois que o primeiro ciclo fechar. Por enquanto, este é seu primeiro ciclo." />
@@ -109,15 +108,16 @@ export default function HistoryScreen() {
                 </ThemedText>
               ) : null}
             </View>
-            <ThemedText type="small" style={styles.colNum}>
+            <ThemedText type="caption" style={styles.colNum} numberOfLines={1}>
               {formatBRL(h.budget.free)}
             </ThemedText>
-            <ThemedText type="small" style={styles.colNum}>
+            <ThemedText type="caption" style={styles.colNum} numberOfLines={1}>
               {formatBRL(h.budget.spent)}
             </ThemedText>
             <ThemedText
-              type="smallBold"
-              style={[styles.colNum, { color: h.saved < 0 ? theme.danger : theme.text }]}>
+              type="caption"
+              numberOfLines={1}
+              style={[styles.colNum, { fontWeight: 700, color: h.saved < 0 ? theme.danger : theme.success }]}>
               {h.closed || h.saved ? formatBRL(h.saved) : '—'}
             </ThemedText>
           </Row>
@@ -167,6 +167,6 @@ function CycleDetail({ summary, categoryId }: { summary: CycleSummary; categoryI
 const styles = StyleSheet.create({
   detail: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.two, gap: Spacing.one },
   tableRow: { borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: Spacing.two, alignItems: 'flex-start' },
-  colCycle: { flex: 1.1 },
-  colNum: { flex: 1, textAlign: 'right' },
+  colCycle: { flex: 0.8 },
+  colNum: { flex: 1.1, textAlign: 'right' },
 });

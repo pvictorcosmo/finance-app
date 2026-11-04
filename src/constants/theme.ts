@@ -7,32 +7,51 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+/**
+ * Tokens de cor. `background` é o fundo da tela, `backgroundElement` a superfície
+ * dos cards e `backgroundSelected` campos, trilhas e chips não selecionados.
+ * `primary` é para preenchimentos (botões, gradiente); `accent` para texto/ícone de destaque.
+ */
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-    border: '#D9D9E0',
-    primary: '#208AEF',
-    onPrimary: '#ffffff',
-    success: '#218358',
-    warning: '#CC4E00',
-    danger: '#DC3E42',
+    text: '#0E0F13',
+    background: '#F3F4F7',
+    backgroundElement: '#FFFFFF',
+    backgroundSelected: '#ECEEF2',
+    textSecondary: '#6B6F7B',
+    border: '#E3E5EB',
+    primary: '#5B57E8',
+    primarySoft: '#ECEBFD',
+    accent: '#4F4BD9',
+    onPrimary: '#FFFFFF',
+    heroFrom: '#5B57E8',
+    heroTo: '#8E5CF7',
+    success: '#15803D',
+    successSoft: '#E7F6EC',
+    warning: '#B45309',
+    warningSoft: '#FDF1E3',
+    danger: '#DC2626',
+    dangerSoft: '#FDECEC',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-    border: '#363A3F',
-    primary: '#3B9EFF',
-    onPrimary: '#ffffff',
-    success: '#3DD68C',
-    warning: '#FF8B3E',
-    danger: '#FF6369',
+    text: '#F5F6F8',
+    background: '#0A0A0D',
+    backgroundElement: '#16171C',
+    backgroundSelected: '#22242B',
+    textSecondary: '#9A9EAB',
+    border: '#2A2C34',
+    primary: '#6C69F5',
+    primarySoft: '#24234A',
+    accent: '#A5A3FF',
+    onPrimary: '#FFFFFF',
+    heroFrom: '#4B47D6',
+    heroTo: '#7A3FE4',
+    success: '#4ADE80',
+    successSoft: '#13291C',
+    warning: '#FBBF24',
+    warningSoft: '#2E2410',
+    danger: '#F87171',
+    dangerSoft: '#341A1A',
   },
 } as const;
 

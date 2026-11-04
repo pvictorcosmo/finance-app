@@ -11,7 +11,7 @@ export function ColorPicker({ value, onChange }: { value: string; onChange: (col
   const series = useSeriesColor();
   return (
     <View style={styles.field}>
-      <ThemedText type="small" themeColor="textSecondary">
+      <ThemedText type="caption" themeColor="textSecondary" style={styles.label}>
         Cor
       </ThemedText>
       <View style={styles.row}>
@@ -31,7 +31,8 @@ export function ColorPicker({ value, onChange }: { value: string; onChange: (col
 }
 
 const styles = StyleSheet.create({
-  field: { gap: Spacing.one },
+  field: { gap: 6 },
+  label: { textTransform: 'uppercase', letterSpacing: 0.6 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   swatch: { width: 36, height: 36, borderRadius: 18, borderWidth: 3 },
 });

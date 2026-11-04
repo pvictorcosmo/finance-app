@@ -4,7 +4,8 @@ import { Alert } from 'react-native';
 
 import { DateField } from '@/components/date-field';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, Chips, DayStepper, Field, FormScreen } from '@/components/ui';
+import { categoryIcon } from '@/components/icon';
+import { AmountInput, Button, Card, Chips, DayStepper, Field, FormScreen } from '@/components/ui';
 import { computeBudget } from '@/domain/budget';
 import { expenseCharges, installmentCount } from '@/domain/charges';
 import { cycleFor } from '@/domain/cycle';
@@ -115,6 +116,12 @@ export default function ExpenseForm() {
   return (
     <FormScreen>
       <Stack.Screen options={{ title: existing ? 'Editar gasto' : 'Novo gasto' }} />
+      <AmountInput
+        label={count > 1 ? (amountMode === 'total' ? 'Valor total' : 'Valor de cada parcela') : 'Valor'}
+        value={amount}
+        onChangeText={setAmount}
+        autoFocus={!existing}
+      />
 
       <Chips label="Pagamento" options={paymentOptions(data.cards)} value={paymentKey} onChange={setPaymentKey} />
       {data.cards.length === 0 ? (
@@ -143,14 +150,6 @@ export default function ExpenseForm() {
       ) : null}
 
       <Field
-        label={count > 1 ? (amountMode === 'total' ? 'Valor total (R$)' : 'Valor de cada parcela (R$)') : 'Valor (R$)'}
-        value={amount}
-        onChangeText={setAmount}
-        keyboardType="decimal-pad"
-        placeholder="0,00"
-        autoFocus={!existing}
-      />
-      <Field
         label="Descrição"
         value={description}
         onChangeText={setDescription}
@@ -159,7 +158,7 @@ export default function ExpenseForm() {
 
       <Chips
         label="Categoria"
-        options={data.categories.map((c) => ({ value: c.id, label: c.name, color: c.color }))}
+        options={data.categories.map((c) => ({ value: c.id, label: c.name, color: c.color, icon: categoryIcon(c) }))}
         value={categoryId}
         onChange={setCategoryId}
       />

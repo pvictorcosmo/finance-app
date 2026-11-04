@@ -32,6 +32,8 @@ export type LimitType = 'amount' | 'percent';
 export interface Category extends Entity {
   name: string;
   color: string;
+  /** Nome do ícone (chave de components/icon). Opcional: sem ele, é sugerido pelo nome. */
+  icon?: string;
   limitType: LimitType;
   /** Centavos quando limitType = 'amount'; porcentagem (0–100) do valor livre quando 'percent'. */
   limitValue: number;
@@ -109,7 +111,7 @@ export interface Receivable extends Entity {
 }
 
 /** Categoria como estava num ciclo fechado. */
-export type PlanCategory = Pick<Category, 'id' | 'name' | 'color' | 'limitType' | 'limitValue'>;
+export type PlanCategory = Pick<Category, 'id' | 'name' | 'color' | 'icon' | 'limitType' | 'limitValue'>;
 
 /**
  * "Foto" do planejamento de um ciclo quando ele termina, para o histórico

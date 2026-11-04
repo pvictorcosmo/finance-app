@@ -1,22 +1,25 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { HeroCard, HeroText, shade } from '@/components/hero-card';
+import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import {
   Badge,
   Button,
   Card,
   Checkbox,
-  Dot,
+  Divider,
   EmptyState,
-  KeyValue,
+  IconButton,
   ListItem,
   ProgressBar,
   Row,
   Screen,
   SectionHeader,
 } from '@/components/ui';
+import { useSeriesColor } from '@/constants/series-colors';
 import { Spacing } from '@/constants/theme';
 import { allCharges } from '@/domain/charges';
 import { addDays, formatShort, relativeDays, todayISO } from '@/domain/dates';
@@ -27,6 +30,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useFinance, useFinanceData } from '@/store/finance-store';
 
 export default function CardsScreen() {
+  const theme = useTheme();
   const data = useFinanceData();
   const toggleInvoicePaid = useFinance((s) => s.toggleInvoicePaid);
   const today = todayISO();
@@ -53,46 +57,55 @@ export default function CardsScreen() {
   );
 
   return (
-    <Screen title="Cartões" subtitle="Quando pagar cada fatura">
+    <Screen
+      title="Cartões"
+      subtitle="Quando pagar cada fatura"
+      action={<IconButton icon="add" label="Adicionar cartão" onPress={() => router.push('/card')} />}>
       {data.cards.length === 0 ? (
         <EmptyState
+          icon="card"
           text="Cadastre seus cartões de crédito com o dia de fechamento e de vencimento para acompanhar as faturas."
-          action={<Button label="Adicionar cartão" onPress={() => router.push('/card')} />}
+          action={<Button label="Adicionar cartão" icon="add" onPress={() => router.push('/card')} />}
         />
       ) : (
         <>
           <SectionHeader title="Próximos pagamentos" />
           {nextPayments.length === 0 ? (
-            <EmptyState text="Nenhuma fatura a pagar agora. ✓" />
+            <EmptyState icon="check" text="Nenhuma fatura a pagar agora." />
           ) : (
             <Card>
-              {nextPayments.map(({ card, invoice }) => (
-                <ListItem
-                  key={`${card.id}-${invoice.due}`}
-                  color={card.color}
-                  title={`${card.name} · vence ${formatShort(invoice.due)}`}
-                  subtitle={
-                    invoice.overdue
-                      ? `! Atrasada · venceu ${relativeDays(invoice.due, today)}`
-                      : invoice.status === 'closed'
-                        ? `Fechada · pagar ${relativeDays(invoice.due, today)}`
-                        : `Aberta · fecha ${formatShort(invoice.closing)}, ainda pode aumentar`
-                  }
-                  right={
-                    <Row>
-                      <ThemedText type="smallBold">{formatBRL(invoice.total)}</ThemedText>
-                      <Checkbox
-                        checked={false}
-                        label={`Marcar fatura ${card.name} como paga`}
-                        onPress={() => toggleInvoicePaid(card.id, invoice.due)}
-                      />
-                    </Row>
-                  }
-                />
+              {nextPayments.map(({ card, invoice }, i) => (
+                <Fragment key={`${card.id}-${invoice.due}`}>
+                  {i > 0 ? <Divider /> : null}
+                  <ListItem
+                    icon="card"
+                    color={card.color}
+                    title={`${card.name} · ${formatShort(invoice.due)}`}
+                    subtitle={
+                      invoice.overdue
+                        ? `! Atrasada · venceu ${relativeDays(invoice.due, today)}`
+                        : invoice.status === 'closed'
+                          ? `Fechada · pagar ${relativeDays(invoice.due, today)}`
+                          : `Aberta · fecha ${formatShort(invoice.closing)}`
+                    }
+                    subtitleColor={invoice.overdue ? theme.danger : invoice.status === 'closed' ? theme.warning : undefined}
+                    right={
+                      <Row>
+                        <ThemedText type="smallBold">{formatBRL(invoice.total)}</ThemedText>
+                        <Checkbox
+                          checked={false}
+                          label={`Marcar fatura ${card.name} como paga`}
+                          onPress={() => toggleInvoicePaid(card.id, invoice.due)}
+                        />
+                      </Row>
+                    }
+                  />
+                </Fragment>
               ))}
             </Card>
           )}
 
+          <SectionHeader title="Meus cartões" />
           {perCard.map(({ card, invoices }) => (
             <CardBlock
               key={card.id}
@@ -101,8 +114,6 @@ export default function CardsScreen() {
               onTogglePaid={(due) => toggleInvoicePaid(card.id, due)}
             />
           ))}
-
-          <Button label="Adicionar cartão" variant="secondary" onPress={() => router.push('/card')} />
         </>
       )}
     </Screen>
@@ -112,8 +123,8 @@ export default function CardsScreen() {
 function statusBadge(inv: Invoice) {
   if (inv.paid) return <Badge tone="success" label="Paga" />;
   if (inv.overdue) return <Badge tone="danger" label="Atrasada" />;
-  if (inv.status === 'closed') return <Badge tone="warning" label="Fechada · a pagar" />;
-  if (inv.status === 'open') return <Badge tone="neutral" label="Aberta" />;
+  if (inv.status === 'closed') return <Badge tone="warning" label="Fechada" />;
+  if (inv.status === 'open') return <Badge tone="accent" label="Aberta" />;
   return <Badge tone="neutral" label="Próxima" />;
 }
 
@@ -127,87 +138,146 @@ function CardBlock({
   onTogglePaid: (due: string) => void;
 }) {
   const theme = useTheme();
+  const series = useSeriesColor();
   const [expanded, setExpanded] = useState<string | null>(null);
   // Limite comprometido: tudo que ainda não foi pago (inclui parcelas futuras).
   const used = invoices.filter((i) => !i.paid).reduce((s, i) => s + i.total, 0);
+  const open = invoices.find((i) => i.status === 'open');
+  const base = series(card.color);
 
   return (
-    <Card>
-      <Row style={styles.between}>
-        <Row>
-          <Dot color={card.color} size={14} />
-          <ThemedText type="smallBold">{card.name}</ThemedText>
+    <View style={styles.block}>
+      <HeroCard colors={[base, shade(base, 0.45)]}>
+        <Row style={styles.between}>
+          <Row>
+            <Icon name="card" size={22} color="#FFFFFF" />
+            <HeroText type="heading">{card.name}</HeroText>
+          </Row>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Editar ${card.name}`}
+            hitSlop={10}
+            onPress={() => router.push({ pathname: '/card', params: { id: card.id } })}
+            style={styles.editBtn}>
+            <Icon name="edit" size={16} color="#FFFFFF" />
+          </Pressable>
         </Row>
-        <Button
-          label="Editar"
-          variant="ghost"
-          compact
-          onPress={() => router.push({ pathname: '/card', params: { id: card.id } })}
-        />
-      </Row>
-      <ThemedText type="small" themeColor="textSecondary">
-        Fecha dia {card.closingDay} · vence dia {card.dueDay} · melhor dia de compra: {card.closingDay}
-      </ThemedText>
-
-      {card.limit ? (
-        <View style={styles.limit}>
-          <ProgressBar value={used} max={card.limit} color={used > card.limit ? theme.danger : card.color} />
-          <KeyValue label="Limite comprometido" value={`${formatBRL(used)} de ${formatBRL(card.limit)}`} />
+        <View style={styles.cardAmount}>
+          <HeroText type="caption" dim>
+            FATURA ABERTA
+          </HeroText>
+          <HeroText type="title">{formatBRL(open?.total ?? 0)}</HeroText>
+          {open ? (
+            <HeroText dim>
+              fecha {formatShort(open.closing)} · vence {formatShort(open.due)}
+            </HeroText>
+          ) : null}
         </View>
-      ) : null}
-
-      {invoices.map((inv) => {
-        const isOpen = expanded === inv.due;
-        const canPay = inv.total > 0 && inv.status !== 'future';
-        return (
-          <View key={inv.due} style={[styles.invoice, { borderTopColor: theme.border }]}>
+        {card.limit ? (
+          <View style={styles.cardLimit}>
+            <ProgressBar
+              value={used}
+              max={card.limit}
+              color={used > card.limit ? '#FFD1D1' : '#FFFFFF'}
+              trackColor="rgba(255,255,255,0.22)"
+              height={6}
+            />
             <Row style={styles.between}>
-              <Pressable style={styles.flex} onPress={() => setExpanded(isOpen ? null : inv.due)}>
-                <Row>
-                  <ThemedText type="smallBold">Vence {formatShort(inv.due)}</ThemedText>
-                  {statusBadge(inv)}
-                </Row>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {inv.status === 'closed' || inv.status === 'past'
-                    ? `Fechou ${formatShort(inv.closing)}`
-                    : `Compras até ${formatShort(addDays(inv.closing, -1))} · fecha ${formatShort(inv.closing)}`}
-                  {inv.items.length > 0 ? ` · ${inv.items.length} item(s) ${isOpen ? '▲' : '▼'}` : ''}
-                </ThemedText>
-              </Pressable>
-              <ThemedText type="smallBold">{formatBRL(inv.total)}</ThemedText>
-              {canPay ? (
-                <Checkbox
-                  checked={inv.paid}
-                  label={`Fatura de ${formatShort(inv.due)} paga`}
-                  onPress={() => onTogglePaid(inv.due)}
-                />
-              ) : null}
+              <HeroText type="caption" dim>
+                Limite usado {formatBRL(used)}
+              </HeroText>
+              <HeroText type="caption" dim>
+                de {formatBRL(card.limit)}
+              </HeroText>
             </Row>
-            {isOpen
-              ? inv.items.map((item) => (
-                  <ListItem
-                    key={item.id}
-                    title={item.description}
-                    subtitle={`${formatShort(item.date)}${item.source === 'fixed' ? ' · conta fixa' : ''}`}
-                    right={formatBRL(item.amount)}
-                    onPress={
-                      item.expenseId
-                        ? () => router.push({ pathname: '/expense', params: { id: item.expenseId! } })
-                        : undefined
-                    }
-                  />
-                ))
-              : null}
           </View>
-        );
-      })}
-    </Card>
+        ) : null}
+        <HeroText type="caption" dim>
+          Melhor dia de compra: dia {card.closingDay}
+        </HeroText>
+      </HeroCard>
+
+      <Card>
+        {invoices.map((inv, i) => {
+          const isOpen = expanded === inv.due;
+          const canPay = inv.total > 0 && inv.status !== 'future';
+          return (
+            <Fragment key={inv.due}>
+              {i > 0 ? <Divider /> : null}
+              <Row style={styles.invoiceRow}>
+                <Pressable
+                  style={styles.flex}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: isOpen }}
+                  onPress={() => setExpanded(isOpen ? null : inv.due)}>
+                  <Row>
+                    <ThemedText type="smallBold">Vence {formatShort(inv.due)}</ThemedText>
+                    {statusBadge(inv)}
+                  </Row>
+                  <Row style={styles.meta}>
+                    <ThemedText type="caption" themeColor="textSecondary">
+                      {inv.status === 'closed' || inv.status === 'past'
+                        ? `Fechou ${formatShort(inv.closing)}`
+                        : `Compras até ${formatShort(addDays(inv.closing, -1))}`}
+                      {inv.items.length > 0 ? ` · ${inv.items.length} item(s)` : ''}
+                    </ThemedText>
+                    {inv.items.length > 0 ? (
+                      <Icon name={isOpen ? 'chevronUp' : 'chevronDown'} size={14} color={theme.textSecondary} />
+                    ) : null}
+                  </Row>
+                </Pressable>
+                <ThemedText type="smallBold">{formatBRL(inv.total)}</ThemedText>
+                {canPay ? (
+                  <Checkbox
+                    checked={inv.paid}
+                    label={`Fatura de ${formatShort(inv.due)} paga`}
+                    onPress={() => onTogglePaid(inv.due)}
+                  />
+                ) : (
+                  <View style={styles.checkSpace} />
+                )}
+              </Row>
+              {isOpen ? (
+                <View style={[styles.items, { backgroundColor: theme.backgroundSelected }]}>
+                  {inv.items.map((item) => (
+                    <ListItem
+                      key={item.id}
+                      title={item.description}
+                      subtitle={`${formatShort(item.date)}${item.source === 'fixed' ? ' · conta fixa' : ''}`}
+                      right={formatBRL(item.amount)}
+                      onPress={
+                        item.expenseId
+                          ? () => router.push({ pathname: '/expense', params: { id: item.expenseId! } })
+                          : undefined
+                      }
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </Fragment>
+          );
+        })}
+      </Card>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   between: { justifyContent: 'space-between' },
-  limit: { gap: Spacing.one, marginTop: Spacing.one },
-  invoice: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.two, marginTop: Spacing.one, gap: Spacing.one },
+  block: { gap: Spacing.two, marginBottom: Spacing.two },
+  editBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  cardAmount: { marginTop: Spacing.three, gap: 2 },
+  cardLimit: { gap: Spacing.one, marginTop: Spacing.two },
+  invoiceRow: { paddingVertical: Spacing.two, gap: Spacing.three },
+  meta: { gap: 4, marginTop: 2 },
+  checkSpace: { width: 28 },
+  items: { borderRadius: 14, paddingHorizontal: Spacing.three, marginBottom: Spacing.two },
 });

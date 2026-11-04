@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
+import { categoryIcon } from '@/components/icon';
 import { Button, Card, DayStepper, Field, KeyValue, ListItem, Screen, SectionHeader } from '@/components/ui';
 import { categoryLimit, incomesInCycle } from '@/domain/budget';
 import { cycleFor } from '@/domain/cycle';
@@ -75,7 +76,7 @@ export default function PlanScreen() {
 
       <SectionHeader
         title="Renda extra"
-        action={<Button label="＋ Adicionar" variant="ghost" compact onPress={() => router.push('/income')} />}
+        action={<Button label="Adicionar" icon="add" variant="ghost" compact onPress={() => router.push('/income')} />}
       />
       <Card>
         {incomes.length === 0 ? (
@@ -92,6 +93,8 @@ export default function PlanScreen() {
             return (
               <ListItem
                 key={income.id}
+                icon={income.recurrence === 'monthly' ? 'repeat' : 'income'}
+                color={theme.success}
                 title={income.description}
                 subtitle={`${incomeKindLabel(income.kind)} · ${when} · ${
                   income.destination === 'savings' ? 'poupança' : 'soma no livre'
@@ -106,7 +109,7 @@ export default function PlanScreen() {
 
       <SectionHeader
         title="Contas fixas"
-        action={<Button label="＋ Adicionar" variant="ghost" compact onPress={() => router.push('/fixed-bill')} />}
+        action={<Button label="Adicionar" icon="add" variant="ghost" compact onPress={() => router.push('/fixed-bill')} />}
       />
       <Card>
         {bills.length === 0 ? (
@@ -117,6 +120,8 @@ export default function PlanScreen() {
           bills.map((bill) => (
             <ListItem
               key={bill.id}
+              icon="bill"
+              color={theme.warning}
               title={bill.name}
               subtitle={`Dia ${bill.dueDay} · ${paymentLabel(bill.payment, data.cards)}`}
               right={formatBRL(bill.amount)}
@@ -128,7 +133,7 @@ export default function PlanScreen() {
 
       <SectionHeader
         title="Categorias (gastos variáveis)"
-        action={<Button label="＋ Adicionar" variant="ghost" compact onPress={() => router.push('/category')} />}
+        action={<Button label="Adicionar" icon="add" variant="ghost" compact onPress={() => router.push('/category')} />}
       />
       <Card>
         {data.categories.map((cat) => {
@@ -136,6 +141,7 @@ export default function PlanScreen() {
           return (
             <ListItem
               key={cat.id}
+              icon={categoryIcon(cat)}
               color={cat.color}
               title={cat.name}
               subtitle={cat.limitType === 'percent' ? `${cat.limitValue}% do livre` : 'Valor fixo'}
@@ -153,7 +159,7 @@ export default function PlanScreen() {
             ? 'Nenhum cartão cadastrado.'
             : data.cards.map((c) => c.name).join(', ')}
         </ThemedText>
-        <Button label="Gerenciar cartões" variant="secondary" onPress={() => router.navigate('/cards')} />
+        <Button label="Gerenciar cartões" icon="card" variant="secondary" onPress={() => router.navigate('/cards')} />
       </Card>
     </Screen>
   );

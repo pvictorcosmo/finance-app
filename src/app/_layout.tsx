@@ -4,10 +4,28 @@ import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { Colors } from '@/constants/theme';
 import { todayISO } from '@/domain/dates';
 import { useFinance, useHydrated } from '@/store/finance-store';
 
 SplashScreen.preventAutoHideAsync();
+
+/** Tema da navegação com as cores do app (headers e fundo das telas). */
+function navigationTheme(dark: boolean) {
+  const base = dark ? DarkTheme : DefaultTheme;
+  const c = Colors[dark ? 'dark' : 'light'];
+  return {
+    ...base,
+    colors: {
+      ...base.colors,
+      primary: c.accent,
+      background: c.background,
+      card: c.background,
+      text: c.text,
+      border: c.border,
+    },
+  };
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -20,9 +38,14 @@ export default function RootLayout() {
   }, [hydrated, closeCycles]);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={navigationTheme(colorScheme === 'dark')}>
       {hydrated ? (
-        <Stack screenOptions={{ headerBackButtonDisplayMode: 'minimal' }}>
+        <Stack
+          screenOptions={{
+            headerBackButtonDisplayMode: 'minimal',
+            headerShadowVisible: false,
+            headerTitleStyle: { fontWeight: '700' },
+          }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="expense" options={{ presentation: 'modal', title: 'Gasto' }} />
           <Stack.Screen name="category" options={{ presentation: 'modal', title: 'Categoria' }} />

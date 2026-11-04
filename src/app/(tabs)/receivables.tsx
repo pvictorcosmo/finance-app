@@ -11,10 +11,10 @@ import {
   Chips,
   EmptyState,
   Fab,
-  KeyValue,
   Row,
   Screen,
   SectionHeader,
+  StatTile,
 } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { formatShort, relativeDays, todayISO } from '@/domain/dates';
@@ -66,15 +66,16 @@ export default function ReceivablesScreen() {
         />
       ) : (
         <>
-          <Card>
-            <KeyValue label="Falta receber" value={formatBRL(totals.open)} strong />
-            <KeyValue
+          <Row style={styles.tiles}>
+            <StatTile icon="person" label="Falta receber" value={formatBRL(totals.open)} hint={`${formatBRL(totals.received)} já recebido`} />
+            <StatTile
+              icon={totals.overdue > 0 ? 'warning' : 'check'}
               label="Atrasado"
               value={formatBRL(totals.overdue)}
-              color={totals.overdue > 0 ? theme.danger : undefined}
+              tone={totals.overdue > 0 ? 'danger' : 'success'}
+              hint={totals.overdue > 0 ? 'Cobre quem está devendo' : 'Ninguém atrasado'}
             />
-            <KeyValue label="Já recebido" value={formatBRL(totals.received)} />
-          </Card>
+          </Row>
 
           <SectionHeader title="Por pessoa" />
           <Card>
@@ -197,6 +198,7 @@ function InstallmentRow({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  tiles: { alignItems: 'stretch', gap: Spacing.three },
   pressed: { opacity: 0.7 },
   tableRow: {
     flexDirection: 'row',
