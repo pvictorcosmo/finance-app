@@ -27,6 +27,7 @@ import { formatShort, relativeDays } from '@/domain/dates';
 import { cycleHistory, savingsTotal } from '@/domain/history';
 import { formatBRL } from '@/domain/money';
 import { paymentLabel } from '@/domain/payment';
+import { allAgreementOccurrences, isOpen } from '@/domain/agreements';
 import { allReceivableInstallments } from '@/domain/receivables';
 import { useCycleNavigator } from '@/hooks/use-cycle';
 import { useTheme } from '@/hooks/use-theme';
@@ -57,13 +58,20 @@ export default function SummaryScreen() {
     [data.fixedBills, cycle],
   );
   const toReceive = useMemo(() => {
-    const pending = allReceivableInstallments(data.receivables, today).filter((i) => i.status !== 'received');
-    const overdue = pending.filter((i) => i.status === 'overdue');
+    // Empréstimos + meses de acordo em que a pessoa te deve (saldo positivo).
+    const pending = [
+      ...allReceivableInstallments(data.receivables, today)
+        .filter((i) => i.status !== 'received')
+        .map((i) => ({ date: i.due, amount: i.amount, overdue: i.status === 'overdue' })),
+      ...allAgreementOccurrences(data.agreements, cycle.end, today)
+        .filter((o) => isOpen(o) && o.net > 0)
+        .map((o) => ({ date: o.date, amount: o.net, overdue: o.status === 'overdue' })),
+    ];
     return {
-      inCycle: pending.filter((i) => isInCycle(i.due, cycle)).reduce((s, i) => s + i.amount, 0),
-      overdue: overdue.reduce((s, i) => s + i.amount, 0),
+      inCycle: pending.filter((p) => isInCycle(p.date, cycle)).reduce((s, p) => s + p.amount, 0),
+      overdue: pending.filter((p) => p.overdue).reduce((s, p) => s + p.amount, 0),
     };
-  }, [data.receivables, today, cycle]);
+  }, [data.receivables, data.agreements, today, cycle]);
   const paid = data.fixedPaid[cycle.start] ?? [];
 
   if (data.settings.salary === 0) {

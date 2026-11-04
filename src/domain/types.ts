@@ -110,6 +110,30 @@ export interface Receivable extends Entity {
   received: Record<number, ISODate>;
 }
 
+/**
+ * Acordo mensal com uma pessoa: ela te paga X por mês e você paga Y por ela.
+ * Um valor abate o outro; o que importa é o saldo de cada mês.
+ * O Y não conta no orçamento das suas categorias (é gasto dela).
+ */
+export interface Agreement extends Entity {
+  person: string;
+  description: string;
+  /** Quanto a pessoa te paga por mês (X). */
+  theyPay: Cents;
+  /** Quanto você paga por ela por mês (Y). */
+  iPay: Cents;
+  /** Como você paga o Y. null = só um combinado (nenhum dinheiro sai, só abate). */
+  iPayMethod: PaymentMethod | null;
+  /** Primeiro mês do acordo; o dia se repete todo mês. */
+  startDate: ISODate;
+  /** Duração em meses (ausente = sem prazo). */
+  months?: number;
+  /** Encerrado: não gera meses depois desta data. */
+  endDate?: ISODate;
+  /** Meses acertados: data do mês -> data em que acertaram. */
+  settled: Record<ISODate, ISODate>;
+}
+
 /** Categoria como estava num ciclo fechado. */
 export type PlanCategory = Pick<Category, 'id' | 'name' | 'color' | 'icon' | 'limitType' | 'limitValue'>;
 
@@ -134,6 +158,7 @@ export interface FinanceData {
   expenses: Expense[];
   incomes: Income[];
   receivables: Receivable[];
+  agreements: Agreement[];
   /** Contas fixas marcadas como pagas, por ciclo: { [inícioDoCiclo]: billIds[] }. */
   fixedPaid: Record<ISODate, ID[]>;
   /** Faturas pagas: { [cardId]: datasDeVencimento[] }. */

@@ -7,7 +7,9 @@ import { MonthCalendar, type DayMarkers } from '@/components/month-calendar';
 import { ThemedText } from '@/components/themed-text';
 import { Card, Dot, EmptyState, Fab, KeyValue, ListItem, Row, Screen, SectionHeader } from '@/components/ui';
 import { incomeDateInCycle } from '@/domain/budget';
+import { allAgreementOccurrences } from '@/domain/agreements';
 import { allCharges } from '@/domain/charges';
+import { invoiceCharges } from '@/domain/invoice-charges';
 import { addMonths, clampDay, daysInMonth, formatLong, MONTHS, parseISO, todayISO, toISO, type YM } from '@/domain/dates';
 import { buildInvoice, invoiceDatesForDueMonth, type Invoice } from '@/domain/invoice';
 import { incomeKindLabel } from '@/domain/labels';
@@ -52,6 +54,14 @@ export default function CalendarScreen() {
     [data, monthRange],
   );
 
+  const monthAgreements = useMemo(
+    () => allAgreementOccurrences(data.agreements, monthRange.end, today).filter((o) => o.date.startsWith(monthPrefix)),
+    [data.agreements, monthRange.end, today, monthPrefix],
+  );
+
+  // Faturas: compras + o Y dos acordos pagos no cartão.
+  const cardCharges = useMemo(() => invoiceCharges(data, today), [data, today]);
+
   const monthReceivables = useMemo(
     () => allReceivableInstallments(data.receivables, today).filter((i) => i.due.startsWith(monthPrefix)),
     [data.receivables, today, monthPrefix],
@@ -64,7 +74,7 @@ export default function CalendarScreen() {
     for (const card of data.cards) {
       due.push({
         card,
-        invoice: buildInvoice(card, month, charges, data.fixedBills, today, data.invoicePaid[card.id]),
+        invoice: buildInvoice(card, month, cardCharges, data.fixedBills, today, data.invoicePaid[card.id]),
       });
       for (const k of [0, 1]) {
         const dates = invoiceDatesForDueMonth(card, addMonths(month, k));
@@ -72,7 +82,7 @@ export default function CalendarScreen() {
       }
     }
     return { due, closings };
-  }, [data.cards, data.fixedBills, data.invoicePaid, charges, month, monthPrefix, today]);
+  }, [data.cards, data.fixedBills, data.invoicePaid, cardCharges, month, monthPrefix, today]);
 
   const markers = useMemo(() => {
     const m: DayMarkers = {};
@@ -84,16 +94,18 @@ export default function CalendarScreen() {
     for (const { date } of monthBills) add(date, theme.warning);
     for (const { date } of monthIncomes) add(date, theme.success);
     for (const r of monthReceivables) if (r.status !== 'received') add(r.due, theme.success);
+    for (const o of monthAgreements) add(o.date, theme.accent);
     for (const c of monthCharges) {
       add(c.date, data.categories.find((cat) => cat.id === c.categoryId)?.color ?? theme.textSecondary);
     }
     return m;
-  }, [monthCharges, monthBills, monthIncomes, monthReceivables, monthInvoices, data.categories, theme]);
+  }, [monthCharges, monthBills, monthIncomes, monthReceivables, monthAgreements, monthInvoices, data.categories, theme]);
 
   const dayCharges = monthCharges.filter((c) => c.date === selected);
   const dayBills = monthBills.filter((b) => b.date === selected);
   const dayIncomes = monthIncomes.filter((i) => i.date === selected);
   const dayReceivables = monthReceivables.filter((r) => r.due === selected);
+  const dayAgreements = monthAgreements.filter((o) => o.date === selected);
   const dayInvoices = monthInvoices.due.filter((d) => d.invoice.due === selected && d.invoice.total > 0);
   const dayClosings = monthInvoices.closings.filter((c) => c.date === selected);
   const nothing =
@@ -101,6 +113,7 @@ export default function CalendarScreen() {
     !dayBills.length &&
     !dayIncomes.length &&
     !dayReceivables.length &&
+    !dayAgreements.length &&
     !dayInvoices.length &&
     !dayClosings.length;
 
@@ -178,6 +191,25 @@ export default function CalendarScreen() {
               onPress={() => router.navigate('/receivables')}
             />
           ))}
+          {dayAgreements.map((o) => (
+            <ListItem
+              key={`agr-${o.agreement.id}`}
+              icon="repeat"
+              color={theme.accent}
+              title={`Acerto com ${o.agreement.person}`}
+              subtitle={`${o.agreement.description} · ${
+                o.status === 'compensated'
+                  ? '✓ compensado'
+                  : o.status === 'settled'
+                    ? '✓ acertado'
+                    : o.net > 0
+                      ? 'te deve'
+                      : 'você deve'
+              }`}
+              right={o.net === 0 ? 'Quites' : `${o.net > 0 ? '+' : '−'} ${formatBRL(Math.abs(o.net))}`}
+              onPress={() => router.navigate('/receivables')}
+            />
+          ))}
           {dayBills.map(({ bill }) => (
             <ListItem
               key={`bill-${bill.id}`}
@@ -209,6 +241,7 @@ export default function CalendarScreen() {
       <Row style={styles.legend}>
         <Legend color={theme.warning} label="Conta fixa" />
         <Legend color={theme.success} label="Entradas e devedores" />
+        <Legend color={theme.accent} label="Acordos" />
         <Legend color={theme.accent} label="Gastos (cor da categoria)" />
       </Row>
     </Screen>

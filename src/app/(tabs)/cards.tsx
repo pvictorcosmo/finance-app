@@ -21,7 +21,7 @@ import {
 } from '@/components/ui';
 import { useSeriesColor } from '@/constants/series-colors';
 import { Spacing } from '@/constants/theme';
-import { allCharges } from '@/domain/charges';
+import { invoiceCharges } from '@/domain/invoice-charges';
 import { addDays, formatShort, relativeDays, todayISO } from '@/domain/dates';
 import { upcomingInvoices, type Invoice } from '@/domain/invoice';
 import { formatBRL } from '@/domain/money';
@@ -36,12 +36,12 @@ export default function CardsScreen() {
   const today = todayISO();
 
   const perCard = useMemo(() => {
-    const charges = allCharges(data.expenses, data.cards);
+    const charges = invoiceCharges(data, today);
     return data.cards.map((card) => ({
       card,
       invoices: upcomingInvoices(card, charges, data.fixedBills, today, data.invoicePaid[card.id]),
     }));
-  }, [data.cards, data.expenses, data.fixedBills, data.invoicePaid, today]);
+  }, [data, today]);
 
   // Próximos pagamentos de todos os cartões (atrasadas primeiro), em ordem de vencimento.
   const nextPayments = useMemo(
@@ -243,12 +243,14 @@ function CardBlock({
                     <ListItem
                       key={item.id}
                       title={item.description}
-                      subtitle={`${formatShort(item.date)}${item.source === 'fixed' ? ' · conta fixa' : ''}`}
+                      subtitle={`${formatShort(item.date)}${item.source === 'fixed' ? ' · conta fixa' : item.source === 'agreement' ? ' · acordo (fora das categorias)' : ''}`}
                       right={formatBRL(item.amount)}
                       onPress={
-                        item.expenseId
-                          ? () => router.push({ pathname: '/expense', params: { id: item.expenseId! } })
-                          : undefined
+                        !item.expenseId
+                          ? undefined
+                          : item.source === 'agreement'
+                            ? () => router.push({ pathname: '/agreement', params: { id: item.expenseId! } })
+                            : () => router.push({ pathname: '/expense', params: { id: item.expenseId! } })
                       }
                     />
                   ))}

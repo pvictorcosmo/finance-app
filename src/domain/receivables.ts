@@ -1,6 +1,7 @@
 import { splitInstallments } from './charges';
+import { allAgreementOccurrences, isOpen } from './agreements';
 import { addMonthsISO } from './dates';
-import type { Cents, ISODate, Receivable } from './types';
+import type { Agreement, Cents, ISODate, Receivable } from './types';
 
 export type ReceivableStatus = 'received' | 'overdue' | 'pending';
 
@@ -38,31 +39,59 @@ export function allReceivableInstallments(receivables: Receivable[], today: ISOD
 
 export interface PersonSummary {
   person: string;
-  /** Ainda falta receber. */
+  /** Saldo em aberto: positivo = a pessoa te deve; negativo = você deve a ela. */
   open: Cents;
-  /** Parte do que falta que já venceu. */
+  /** Parte do saldo que já venceu (mesmo sinal). */
   overdue: Cents;
   received: Cents;
   nextDue?: ISODate;
+  /** Tem acordo mensal ativo com a pessoa. */
+  hasAgreement: boolean;
 }
 
-/** Tabela "quem me deve": uma linha por pessoa. */
-export function personSummaries(receivables: Receivable[], today: ISODate): PersonSummary[] {
+/** Até quando os acordos sem prazo contam no "em aberto": o mês que vem. */
+export function agreementHorizon(today: ISODate): ISODate {
+  return addMonthsISO(today, 1);
+}
+
+/** Tabela "quem me deve": uma linha por pessoa (empréstimos + acordos mensais). */
+export function personSummaries(receivables: Receivable[], agreements: Agreement[], today: ISODate): PersonSummary[] {
   const byPerson = new Map<string, PersonSummary>();
-  for (const inst of allReceivableInstallments(receivables, today)) {
-    const name = inst.receivable.person.trim();
+  const rowFor = (person: string) => {
+    const name = person.trim();
     const key = name.toLocaleLowerCase('pt-BR');
-    const row = byPerson.get(key) ?? { person: name, open: 0, overdue: 0, received: 0 };
+    const row = byPerson.get(key) ?? { person: name, open: 0, overdue: 0, received: 0, hasAgreement: false };
+    byPerson.set(key, row);
+    return row;
+  };
+  const bumpNext = (row: PersonSummary, date: ISODate) => {
+    if (!row.nextDue || date < row.nextDue) row.nextDue = date;
+  };
+
+  for (const inst of allReceivableInstallments(receivables, today)) {
+    const row = rowFor(inst.receivable.person);
     if (inst.status === 'received') {
       row.received += inst.amount;
     } else {
       row.open += inst.amount;
       if (inst.status === 'overdue') row.overdue += inst.amount;
-      if (!row.nextDue || inst.due < row.nextDue) row.nextDue = inst.due;
+      bumpNext(row, inst.due);
     }
-    byPerson.set(key, row);
   }
+
+  for (const o of allAgreementOccurrences(agreements, agreementHorizon(today), today)) {
+    const row = rowFor(o.agreement.person);
+    row.hasAgreement = true;
+    if (o.status === 'settled') {
+      if (o.net > 0) row.received += o.net;
+    } else if (isOpen(o)) {
+      row.open += o.net;
+      if (o.status === 'overdue') row.overdue += o.net;
+      bumpNext(row, o.date);
+    }
+  }
+
   return [...byPerson.values()].sort(
-    (a, b) => Number(b.open > 0) - Number(a.open > 0) || (a.nextDue ?? '9').localeCompare(b.nextDue ?? '9'),
+    (a, b) => Number(b.open !== 0) - Number(a.open !== 0) || (a.nextDue ?? '9').localeCompare(b.nextDue ?? '9'),
   );
 }

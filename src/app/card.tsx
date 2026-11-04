@@ -16,6 +16,7 @@ export default function CardForm() {
   const cards = useFinance((s) => s.cards);
   const expenses = useFinance((s) => s.expenses);
   const fixedBills = useFinance((s) => s.fixedBills);
+  const agreements = useFinance((s) => s.agreements);
   const saveCard = useFinance((s) => s.saveCard);
   const deleteCard = useFinance((s) => s.deleteCard);
 
@@ -41,7 +42,8 @@ export default function CardForm() {
     if (!existing) return;
     const used =
       expenses.filter((e) => e.payment.kind === 'credit' && e.payment.cardId === existing.id).length +
-      fixedBills.filter((b) => b.payment.kind === 'credit' && b.payment.cardId === existing.id).length;
+      fixedBills.filter((b) => b.payment.kind === 'credit' && b.payment.cardId === existing.id).length +
+      agreements.filter((a) => a.iPayMethod?.kind === 'credit' && a.iPayMethod.cardId === existing.id).length;
     Alert.alert(
       `Excluir ${existing.name}?`,
       used > 0 ? `${used} lançamento(s) estão neste cartão e vão aparecer como "Cartão removido".` : undefined,

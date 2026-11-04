@@ -8,6 +8,7 @@ import { livePlan } from '@/domain/budget';
 import { cycleFor, shiftCycle } from '@/domain/cycle';
 import { todayISO } from '@/domain/dates';
 import type {
+  Agreement,
   Category,
   CreditCard,
   CycleSnapshot,
@@ -46,6 +47,10 @@ interface FinanceActions {
   deleteReceivable: (id: ID) => void;
   /** Marca/desmarca uma parcela de um devedor como recebida. */
   toggleReceived: (id: ID, index: number, date: ISODate) => void;
+  saveAgreement: (draft: Draft<Agreement>) => void;
+  deleteAgreement: (id: ID) => void;
+  /** Marca/desmarca o mês `date` de um acordo como acertado. */
+  toggleAgreementSettled: (id: ID, date: ISODate, settledOn: ISODate) => void;
   toggleFixedPaid: (cycleStart: ISODate, billId: ID) => void;
   toggleInvoicePaid: (cardId: ID, due: ISODate) => void;
   /** Salva a "foto" dos ciclos que já terminaram (para histórico e poupança). */
@@ -100,6 +105,7 @@ function seed(): FinanceData {
     expenses: [],
     incomes: [],
     receivables: [],
+    agreements: [],
     fixedPaid: {},
     invoicePaid: {},
     snapshots: [],
@@ -142,6 +148,19 @@ export const useFinance = create<FinanceState>()(
           }),
         })),
 
+      saveAgreement: (draft) => set((s) => ({ agreements: upsert(s.agreements, draft) })),
+      deleteAgreement: (id) => set((s) => ({ agreements: s.agreements.filter((a) => a.id !== id) })),
+      toggleAgreementSettled: (id, date, settledOn) =>
+        set((s) => ({
+          agreements: s.agreements.map((a) => {
+            if (a.id !== id) return a;
+            const settled = { ...a.settled };
+            if (settled[date]) delete settled[date];
+            else settled[date] = settledOn;
+            return { ...a, settled, updatedAt: nowStamp() };
+          }),
+        })),
+
       toggleFixedPaid: (cycleStart, billId) =>
         set((s) => ({ fixedPaid: { ...s.fixedPaid, [cycleStart]: toggleIn(s.fixedPaid[cycleStart], billId) } })),
       toggleInvoicePaid: (cardId, due) =>
@@ -170,7 +189,7 @@ export const useFinance = create<FinanceState>()(
     }),
     {
       name: 'finance-app/data',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s): FinanceData => ({
         settings: s.settings,
@@ -180,6 +199,7 @@ export const useFinance = create<FinanceState>()(
         expenses: s.expenses,
         incomes: s.incomes,
         receivables: s.receivables,
+        agreements: s.agreements,
         fixedPaid: s.fixedPaid,
         invoicePaid: s.invoicePaid,
         snapshots: s.snapshots,
@@ -196,6 +216,9 @@ export const useFinance = create<FinanceState>()(
           data.invoicePaid ??= {};
           data.snapshots ??= [];
         }
+        if (version < 3) {
+          data.agreements ??= [];
+        }
         return data;
       },
     },
@@ -211,12 +234,25 @@ export function useFinanceData(): FinanceData {
   const expenses = useFinance((s) => s.expenses);
   const incomes = useFinance((s) => s.incomes);
   const receivables = useFinance((s) => s.receivables);
+  const agreements = useFinance((s) => s.agreements);
   const fixedPaid = useFinance((s) => s.fixedPaid);
   const invoicePaid = useFinance((s) => s.invoicePaid);
   const snapshots = useFinance((s) => s.snapshots);
   return useMemo(
-    () => ({ settings, categories, fixedBills, cards, expenses, incomes, receivables, fixedPaid, invoicePaid, snapshots }),
-    [settings, categories, fixedBills, cards, expenses, incomes, receivables, fixedPaid, invoicePaid, snapshots],
+    () => ({
+      settings,
+      categories,
+      fixedBills,
+      cards,
+      expenses,
+      incomes,
+      receivables,
+      agreements,
+      fixedPaid,
+      invoicePaid,
+      snapshots,
+    }),
+    [settings, categories, fixedBills, cards, expenses, incomes, receivables, agreements, fixedPaid, invoicePaid, snapshots],
   );
 }
 

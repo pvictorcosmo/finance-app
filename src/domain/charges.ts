@@ -20,6 +20,8 @@ export interface Charge {
   count: number;
   /** Vencimento da fatura em que esta parcela cai (só cartão de crédito). */
   invoiceDue?: ISODate;
+  /** De onde veio: uma compra (padrão) ou o Y de um acordo mensal (fora do orçamento). */
+  source?: 'expense' | 'agreement';
 }
 
 /** Divide o total em `n` parcelas inteiras; os centavos que sobram vão na primeira. */

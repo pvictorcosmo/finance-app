@@ -53,6 +53,7 @@ export default function RootLayout() {
           <Stack.Screen name="card" options={{ presentation: 'modal', title: 'Cartão' }} />
           <Stack.Screen name="income" options={{ presentation: 'modal', title: 'Renda extra' }} />
           <Stack.Screen name="receivable" options={{ presentation: 'modal', title: 'Devedor' }} />
+          <Stack.Screen name="agreement" options={{ presentation: 'modal', title: 'Acordo mensal' }} />
           <Stack.Screen name="history" options={{ title: 'Histórico e poupança' }} />
         </Stack>
       ) : null}

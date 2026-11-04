@@ -10,12 +10,12 @@ export interface InvoiceDates {
 
 export interface InvoiceItem {
   id: ID;
-  /** Compra de origem (para abrir a edição). */
+  /** Compra (ou acordo, se source = 'agreement') de origem, para abrir a edição. */
   expenseId?: ID;
   description: string;
   amount: Cents;
   date: ISODate;
-  source: 'expense' | 'fixed';
+  source: 'expense' | 'fixed' | 'agreement';
 }
 
 /** closed = já fechou e falta pagar; open = recebendo compras agora; future = próximas; past = vencida. */
@@ -82,7 +82,7 @@ export function buildInvoice(
         description: c.description,
         amount: c.amount,
         date: c.date,
-        source: 'expense',
+        source: c.source ?? 'expense',
       });
     }
   }
