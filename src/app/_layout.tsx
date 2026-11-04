@@ -6,6 +6,7 @@ import { useColorScheme } from 'react-native';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { Colors } from '@/constants/theme';
 import { todayISO } from '@/domain/dates';
+import { useDailySummaryScheduler } from '@/notifications/use-daily-summary-scheduler';
 import { useFinance, useHydrated } from '@/store/finance-store';
 
 SplashScreen.preventAutoHideAsync();
@@ -36,6 +37,9 @@ export default function RootLayout() {
   useEffect(() => {
     if (hydrated) closeCycles(todayISO());
   }, [hydrated, closeCycles]);
+
+  // Resumo diário por notificação, sempre com os dados mais recentes.
+  useDailySummaryScheduler(hydrated);
 
   return (
     <ThemeProvider value={navigationTheme(colorScheme === 'dark')}>

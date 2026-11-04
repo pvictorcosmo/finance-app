@@ -12,6 +12,7 @@ import type {
   Category,
   CreditCard,
   CycleSnapshot,
+  DailySummarySettings,
   Entity,
   Expense,
   FinanceData,
@@ -33,6 +34,7 @@ type Draft<T> = Omit<T, keyof Entity> & { id?: ID };
 interface FinanceActions {
   setSalary: (cents: number) => void;
   setCycleStartDay: (day: number) => void;
+  setDailySummary: (settings: Partial<DailySummarySettings>) => void;
   saveCategory: (draft: Draft<Category>) => void;
   deleteCategory: (id: ID) => void;
   saveFixedBill: (draft: Draft<FixedBill>) => void;
@@ -58,6 +60,9 @@ interface FinanceActions {
 }
 
 export type FinanceState = FinanceData & FinanceActions;
+
+/** Padrão do resumo diário: desligado até você permitir, às 20h. */
+export const DEFAULT_DAILY_SUMMARY: DailySummarySettings = { enabled: false, hour: 20, minute: 0 };
 
 export const CATEGORY_COLORS: readonly string[] = SERIES_COLORS;
 
@@ -119,6 +124,10 @@ export const useFinance = create<FinanceState>()(
 
       setSalary: (salary) => set((s) => ({ settings: { ...s.settings, salary } })),
       setCycleStartDay: (cycleStartDay) => set((s) => ({ settings: { ...s.settings, cycleStartDay } })),
+      setDailySummary: (patch) =>
+        set((s) => ({
+          settings: { ...s.settings, dailySummary: { ...DEFAULT_DAILY_SUMMARY, ...s.settings.dailySummary, ...patch } },
+        })),
 
       saveCategory: (draft) => set((s) => ({ categories: upsert(s.categories, draft) })),
       deleteCategory: (id) => set((s) => ({ categories: s.categories.filter((c) => c.id !== id) })),

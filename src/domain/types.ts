@@ -24,6 +24,14 @@ export interface Settings {
   cycleStartDay: number;
   /** Quando o app começou a ser usado: a poupança e o histórico contam a partir daqui. */
   startedAt: ISODate;
+  /** Notificação diária com o resumo do mês. */
+  dailySummary?: DailySummarySettings;
+}
+
+export interface DailySummarySettings {
+  enabled: boolean;
+  hour: number;
+  minute: number;
 }
 
 export type LimitType = 'amount' | 'percent';

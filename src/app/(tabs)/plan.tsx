@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
+import { DailySummarySettings } from '@/components/daily-summary-settings';
 import { categoryIcon } from '@/components/icon';
 import { Button, Card, DayStepper, Field, KeyValue, ListItem, Screen, SectionHeader } from '@/components/ui';
 import { categoryLimit, incomesInCycle } from '@/domain/budget';
@@ -73,6 +74,9 @@ export default function PlanScreen() {
           color={unallocated >= 0 ? theme.success : theme.danger}
         />
       </Card>
+
+      <SectionHeader title="Avisos" />
+      <DailySummarySettings />
 
       <SectionHeader
         title="Renda extra"

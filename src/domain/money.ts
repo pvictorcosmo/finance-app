@@ -11,6 +11,15 @@ export function formatBRL(cents: Cents): string {
   return `${neg ? '-' : ''}R$ ${reais},${c}`;
 }
 
+/** 123456 -> "R$ 1.235" (sem centavos, para textos curtos como notificações) */
+export function formatBRLShort(cents: Cents): string {
+  const neg = cents < 0;
+  const reais = Math.round(Math.abs(cents) / 100)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${neg ? '-' : ''}R$ ${reais}`;
+}
+
 /**
  * Converte o que o usuário digitou em centavos.
  * Aceita "12,50", "12.50", "1.234,56", "1234" etc. Retorna null se inválido.
