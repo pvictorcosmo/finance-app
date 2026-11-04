@@ -8,6 +8,7 @@ import { Button, Card, DayStepper, Field, FormScreen } from '@/components/ui';
 import { formatShort, todayISO } from '@/domain/dates';
 import { invoiceForPurchase } from '@/domain/invoice';
 import { centsToInput, parseMoney } from '@/domain/money';
+import { CARD_COLORS } from '@/constants/series-colors';
 import { CATEGORY_COLORS, useFinance } from '@/store/finance-store';
 
 export default function CardForm() {
@@ -62,7 +63,7 @@ export default function CardForm() {
     <FormScreen>
       <Stack.Screen options={{ title: existing ? 'Editar cartão' : 'Novo cartão' }} />
       <Field label="Nome" value={name} onChangeText={setName} placeholder="Ex.: Nubank, Itaú" />
-      <ColorPicker value={color} onChange={setColor} />
+      <ColorPicker value={color} onChange={setColor} colors={CARD_COLORS} />
       <DayStepper
         label="Dia de fechamento da fatura"
         value={closingDay}

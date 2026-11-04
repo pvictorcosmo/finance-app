@@ -18,6 +18,25 @@ export const SERIES_COLORS = [
   '#e34948', // vermelho
 ] as const;
 
+/** Roxo (estilo Nubank), só para cartões: não entra nos gráficos, então não conta na paleta acima. */
+export const CARD_PURPLE = '#8A05BE';
+
+/** Cores disponíveis para cartões: a paleta + roxo, ao lado do violeta. */
+export const CARD_COLORS = [...SERIES_COLORS.slice(0, 7), CARD_PURPLE, SERIES_COLORS[7]] as const;
+
+/** Nomes das cores (leitores de tela). */
+export const COLOR_NAMES: Record<string, string> = {
+  '#2a78d6': 'Azul',
+  '#eb6834': 'Laranja',
+  '#1baf7a': 'Verde-água',
+  '#eda100': 'Amarelo',
+  '#e87ba4': 'Rosa',
+  '#008300': 'Verde',
+  '#6250d6': 'Violeta',
+  [CARD_PURPLE]: 'Roxo',
+  '#e34948': 'Vermelho',
+};
+
 const DARK: Record<string, string> = {
   '#2a78d6': '#3987e5',
   '#eb6834': '#d95926',
@@ -27,6 +46,7 @@ const DARK: Record<string, string> = {
   '#008300': '#008300',
   '#6250d6': '#9085e9',
   '#e34948': '#e66767',
+  [CARD_PURPLE]: '#9B3FD9',
 };
 
 /** Cores da primeira versão do app -> cor equivalente da paleta nova. */
