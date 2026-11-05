@@ -49,20 +49,6 @@ const DARK: Record<string, string> = {
   [CARD_PURPLE]: '#9B3FD9',
 };
 
-/** Cores da primeira versão do app -> cor equivalente da paleta nova. */
-export const LEGACY_COLORS: Record<string, string> = {
-  '#208AEF': '#2a78d6',
-  '#30A46C': '#1baf7a',
-  '#F76B15': '#eb6834',
-  '#E5484D': '#e34948',
-  '#8E4EC6': '#6250d6',
-  '#D6409F': '#e87ba4',
-  '#12A594': '#008300',
-  '#FFB224': '#eda100',
-  '#6E56CF': '#6250d6',
-  '#5B5BD6': '#2a78d6',
-};
-
 /** Retorna uma função que converte a cor salva para a do tema atual. */
 export function useSeriesColor() {
   const dark = useColorScheme() === 'dark';

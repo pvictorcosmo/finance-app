@@ -3,10 +3,11 @@ import { useMemo, useSyncExternalStore } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { LEGACY_COLORS, SERIES_COLORS } from '@/constants/series-colors';
+import { SERIES_COLORS } from '@/constants/series-colors';
 import { livePlan } from '@/domain/budget';
 import { cycleFor, shiftCycle } from '@/domain/cycle';
 import { todayISO } from '@/domain/dates';
+import { DATA_VERSION, migrateData } from '@/domain/migrate';
 import type {
   Agreement,
   Category,
@@ -35,6 +36,10 @@ interface FinanceActions {
   setSalary: (cents: number) => void;
   setCycleStartDay: (day: number) => void;
   setDailySummary: (settings: Partial<DailySummarySettings>) => void;
+  /** Registra que um backup foi exportado agora. */
+  markBackupExported: (at: string) => void;
+  /** Substitui todos os dados (importar backup). */
+  replaceAll: (data: FinanceData) => void;
   saveCategory: (draft: Draft<Category>) => void;
   deleteCategory: (id: ID) => void;
   saveFixedBill: (draft: Draft<FixedBill>) => void;
@@ -124,6 +129,21 @@ export const useFinance = create<FinanceState>()(
 
       setSalary: (salary) => set((s) => ({ settings: { ...s.settings, salary } })),
       setCycleStartDay: (cycleStartDay) => set((s) => ({ settings: { ...s.settings, cycleStartDay } })),
+      markBackupExported: (at) => set((s) => ({ settings: { ...s.settings, lastBackupAt: at } })),
+      replaceAll: (data) =>
+        set({
+          settings: data.settings,
+          categories: data.categories,
+          fixedBills: data.fixedBills,
+          cards: data.cards,
+          expenses: data.expenses,
+          incomes: data.incomes,
+          receivables: data.receivables,
+          agreements: data.agreements,
+          fixedPaid: data.fixedPaid ?? {},
+          invoicePaid: data.invoicePaid ?? {},
+          snapshots: data.snapshots ?? [],
+        }),
       setDailySummary: (patch) =>
         set((s) => ({
           settings: { ...s.settings, dailySummary: { ...DEFAULT_DAILY_SUMMARY, ...s.settings.dailySummary, ...patch } },
@@ -198,7 +218,7 @@ export const useFinance = create<FinanceState>()(
     }),
     {
       name: 'finance-app/data',
-      version: 3,
+      version: DATA_VERSION,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s): FinanceData => ({
         settings: s.settings,
@@ -213,23 +233,7 @@ export const useFinance = create<FinanceState>()(
         invoicePaid: s.invoicePaid,
         snapshots: s.snapshots,
       }),
-      migrate: (persisted, version) => {
-        const data = persisted as FinanceData;
-        if (version < 2) {
-          const recolor = <T extends { color: string }>(x: T): T => ({ ...x, color: LEGACY_COLORS[x.color] ?? x.color });
-          data.settings = { ...data.settings, startedAt: data.settings.startedAt ?? todayISO() };
-          data.categories = data.categories.map(recolor);
-          data.cards = data.cards.map(recolor);
-          data.incomes ??= [];
-          data.receivables ??= [];
-          data.invoicePaid ??= {};
-          data.snapshots ??= [];
-        }
-        if (version < 3) {
-          data.agreements ??= [];
-        }
-        return data;
-      },
+      migrate: (persisted, version) => migrateData(persisted, version),
     },
   ),
 );

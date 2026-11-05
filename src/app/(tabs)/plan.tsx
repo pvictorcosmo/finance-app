@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
+import { BackupSettings } from '@/components/backup-settings';
 import { DailySummarySettings } from '@/components/daily-summary-settings';
 import { categoryIcon } from '@/components/icon';
 import { Button, Card, DayStepper, Field, KeyValue, ListItem, Screen, SectionHeader } from '@/components/ui';
@@ -75,8 +76,9 @@ export default function PlanScreen() {
         />
       </Card>
 
-      <SectionHeader title="Avisos" />
+      <SectionHeader title="Avisos e backup" />
       <DailySummarySettings />
+      <BackupSettings />
 
       <SectionHeader
         title="Renda extra"

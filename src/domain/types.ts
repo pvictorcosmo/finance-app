@@ -26,6 +26,8 @@ export interface Settings {
   startedAt: ISODate;
   /** Notificação diária com o resumo do mês. */
   dailySummary?: DailySummarySettings;
+  /** Quando o último backup foi exportado (ISO). */
+  lastBackupAt?: string;
 }
 
 export interface DailySummarySettings {
