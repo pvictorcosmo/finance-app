@@ -16,6 +16,10 @@ import type { DailySummarySettings, FinanceData } from '@/domain/types';
 /** Canal Android com importância alta: é o que faz a notificação aparecer flutuando (heads-up). */
 const CHANNEL_ID = 'daily-summary';
 const KIND = 'daily-summary';
+/** Notification category that adds the "Lançar gasto" action button. */
+export const SUMMARY_CATEGORY = 'daily-summary';
+/** Action identifier of the "Lançar gasto" button. */
+export const ADD_EXPENSE_ACTION = 'add-expense';
 /** Quantos dias à frente agendar (o iOS limita a 64 pendentes; ficamos bem abaixo). */
 const DAYS_AHEAD = 14;
 
@@ -35,6 +39,13 @@ export async function configureNotifications(): Promise<void> {
       shouldSetBadge: false,
     }),
   });
+  try {
+    await Notifications.setNotificationCategoryAsync(SUMMARY_CATEGORY, [
+      { identifier: ADD_EXPENSE_ACTION, buttonTitle: 'Lançar gasto', options: { opensAppToForeground: true } },
+    ]);
+  } catch (error) {
+    console.warn('Notification actions unavailable', error);
+  }
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
       name: 'Resumo diário',
@@ -104,7 +115,7 @@ export async function rescheduleDailySummaries(
     const { title, body } = buildDailySummary(data, date);
     await Notifications.scheduleNotificationAsync({
       identifier: `${KIND}-${date}`,
-      content: { title, body, data: { kind: KIND, date }, sound: 'default' },
+      content: { title, body, data: { kind: KIND, date }, sound: 'default', categoryIdentifier: SUMMARY_CATEGORY },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when, channelId: CHANNEL_ID },
     });
     count++;
@@ -118,7 +129,7 @@ export async function sendTestSummary(data: FinanceData, seconds: number | null)
   if (permission !== 'granted') return permission;
   const { title, body } = buildDailySummary(data, todayISO());
   await Notifications.scheduleNotificationAsync({
-    content: { title, body, data: { kind: 'daily-summary-test' }, sound: 'default' },
+    content: { title, body, data: { kind: 'daily-summary-test' }, sound: 'default', categoryIdentifier: SUMMARY_CATEGORY },
     trigger: seconds
       ? { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, channelId: CHANNEL_ID }
       : Platform.OS === 'android'

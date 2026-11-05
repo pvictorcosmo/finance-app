@@ -46,6 +46,11 @@ const ICONS = {
   edit: { ios: 'pencil', android: 'edit', web: 'edit' },
   clock: { ios: 'clock.fill', android: 'schedule', web: 'schedule' },
   bell: { ios: 'bell.fill', android: 'notifications', web: 'notifications' },
+  sparkles: { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' },
+  send: { ios: 'paperplane.fill', android: 'send', web: 'send' },
+  download: { ios: 'tray.and.arrow.down.fill', android: 'download', web: 'download' },
+  undo: { ios: 'arrow.uturn.backward', android: 'undo', web: 'undo' },
+  key: { ios: 'key.fill', android: 'key', web: 'key' },
 } satisfies Record<string, SymbolName>;
 
 export type IconName = keyof typeof ICONS;

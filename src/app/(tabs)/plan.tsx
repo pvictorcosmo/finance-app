@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
+import { AiSettings } from '@/components/ai-settings';
 import { BackupSettings } from '@/components/backup-settings';
 import { DailySummarySettings } from '@/components/daily-summary-settings';
 import { categoryIcon } from '@/components/icon';
@@ -79,6 +80,17 @@ export default function PlanScreen() {
       <SectionHeader title="Avisos e backup" />
       <DailySummarySettings />
       <BackupSettings />
+
+      <SectionHeader title="Importar e IA" />
+      <Card>
+        <ThemedText type="smallBold">Importar extrato ou fatura</ThemedText>
+        <ThemedText type="caption" themeColor="textSecondary">
+          CSV ou OFX do Nubank, Itaú, Inter, BB e outros. Os gastos são categorizados pelo seu histórico (e pela IA, se
+          configurada) e você revisa antes de salvar.
+        </ThemedText>
+        <Button label="Importar arquivo" icon="download" variant="secondary" onPress={() => router.push('/import')} />
+      </Card>
+      <AiSettings />
 
       <SectionHeader
         title="Renda extra"

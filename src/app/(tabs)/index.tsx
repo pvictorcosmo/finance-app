@@ -95,6 +95,7 @@ export default function SummaryScreen() {
       subtitle={isCurrent ? `Ciclo ${cycleLabel}` : `${offset < 0 ? 'Ciclo encerrado' : 'Ciclo futuro'} · ${cycleLabel}`}
       action={
         <Row>
+          <IconButton icon="sparkles" label="Assistente: lançar gasto por texto" onPress={() => router.push('/assistant')} />
           <IconButton icon="chevronLeft" label="Ciclo anterior" onPress={() => setOffset(offset - 1)} />
           <IconButton icon="chevronRight" label="Próximo ciclo" onPress={() => setOffset(offset + 1)} />
         </Row>
@@ -240,7 +241,16 @@ export default function SummaryScreen() {
                   color={cat?.color ?? theme.textSecondary}
                   title={c.description}
                   subtitle={`${formatShort(c.date)} · ${paymentLabel(c.payment, data.cards)}`}
-                  right={formatBRL(c.amount)}
+                  right={
+                    <Row>
+                      <ThemedText type="smallBold">{formatBRL(c.amount)}</ThemedText>
+                      <IconButton
+                        icon="repeat"
+                        label={`Repetir ${c.description}`}
+                        onPress={() => router.push({ pathname: '/expense', params: { repeat: c.expenseId } })}
+                      />
+                    </Row>
+                  }
                   onPress={() => router.push({ pathname: '/expense', params: { id: c.expenseId } })}
                 />
               </Fragment>

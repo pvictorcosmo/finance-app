@@ -7,6 +7,7 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { Colors } from '@/constants/theme';
 import { todayISO } from '@/domain/dates';
 import { useDailySummaryScheduler } from '@/notifications/use-daily-summary-scheduler';
+import { useNotificationRouting } from '@/notifications/use-notification-routing';
 import { useFinance, useHydrated } from '@/store/finance-store';
 
 SplashScreen.preventAutoHideAsync();
@@ -40,6 +41,7 @@ export default function RootLayout() {
 
   // Resumo diário por notificação, sempre com os dados mais recentes.
   useDailySummaryScheduler(hydrated);
+  useNotificationRouting(hydrated);
 
   return (
     <ThemeProvider value={navigationTheme(colorScheme === 'dark')}>
@@ -58,6 +60,8 @@ export default function RootLayout() {
           <Stack.Screen name="income" options={{ presentation: 'modal', title: 'Renda extra' }} />
           <Stack.Screen name="receivable" options={{ presentation: 'modal', title: 'Devedor' }} />
           <Stack.Screen name="agreement" options={{ presentation: 'modal', title: 'Acordo mensal' }} />
+          <Stack.Screen name="assistant" options={{ title: 'Assistente' }} />
+          <Stack.Screen name="import" options={{ title: 'Importar extrato' }} />
           <Stack.Screen name="history" options={{ title: 'Histórico e poupança' }} />
         </Stack>
       ) : null}

@@ -60,7 +60,12 @@ export default function CardsScreen() {
     <Screen
       title="Cartões"
       subtitle="Quando pagar cada fatura"
-      action={<IconButton icon="add" label="Adicionar cartão" onPress={() => router.push('/card')} />}>
+      action={
+        <Row>
+          <IconButton icon="download" label="Importar fatura" onPress={() => router.push('/import')} />
+          <IconButton icon="add" label="Adicionar cartão" onPress={() => router.push('/card')} />
+        </Row>
+      }>
       {data.cards.length === 0 ? (
         <EmptyState
           icon="card"

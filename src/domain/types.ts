@@ -28,7 +28,12 @@ export interface Settings {
   dailySummary?: DailySummarySettings;
   /** Quando o último backup foi exportado (ISO). */
   lastBackupAt?: string;
+  /** Claude model used by the AI features. */
+  aiModel?: AiModel;
 }
+
+/** Claude models the user can pick for the AI features. */
+export type AiModel = 'claude-opus-5-5' | 'claude-haiku-5-5';
 
 export interface DailySummarySettings {
   enabled: boolean;
@@ -85,6 +90,8 @@ export interface Expense extends Entity {
   payment: PaymentMethod;
   /** Número de parcelas no cartão de crédito (1 = à vista). */
   installments?: number;
+  /** Bank transaction id (or a stable hash) for expenses imported from a statement. */
+  externalId?: string;
 }
 
 export type IncomeKind = 'freela' | 'thirteenth' | 'meal' | 'bonus' | 'other';

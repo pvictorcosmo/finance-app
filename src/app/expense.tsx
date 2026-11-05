@@ -1,6 +1,6 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Alert } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { DateField } from '@/components/date-field';
 import { ThemedText } from '@/components/themed-text';
@@ -12,6 +12,9 @@ import { cycleFor } from '@/domain/cycle';
 import { formatMonthYear, formatShort, todayISO } from '@/domain/dates';
 import { centsToInput, formatBRL, parseMoney } from '@/domain/money';
 import { keyToPayment, paymentOptions, paymentToKey } from '@/domain/payment';
+import { readDraftParam } from '@/domain/quick-parse';
+import { autocomplete, buildHistoryIndex, suggestByKeywords, suggestFromHistory } from '@/domain/suggestions';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useFinance, useFinanceData } from '@/store/finance-store';
 
@@ -19,27 +22,66 @@ type AmountMode = 'total' | 'installment';
 
 export default function ExpenseForm() {
   const theme = useTheme();
-  const params = useLocalSearchParams<{ id?: string; date?: string }>();
+  const params = useLocalSearchParams<{ id?: string; date?: string; draft?: string; repeat?: string }>();
   const data = useFinanceData();
   const saveExpense = useFinance((s) => s.saveExpense);
   const deleteExpense = useFinance((s) => s.deleteExpense);
 
   const existing = data.expenses.find((e) => e.id === params.id);
+  // "Repeat": a copy of another expense, dated today. "Draft": pre-filled by the assistant.
+  const repeated = data.expenses.find((e) => e.id === params.repeat);
+  const draft = readDraftParam(params.draft);
+  const source = existing ?? repeated;
   const lastPayment = data.expenses.at(-1)?.payment;
+  const index = useMemo(() => buildHistoryIndex(data.expenses), [data.expenses]);
 
-  const [amount, setAmount] = useState(existing ? centsToInput(existing.amount) : '');
+  const [amount, setAmount] = useState(() => {
+    const cents = source?.amount ?? draft?.amount;
+    return cents ? centsToInput(cents) : '';
+  });
   const [amountMode, setAmountMode] = useState<AmountMode>('total');
-  const [description, setDescription] = useState(existing?.description ?? '');
-  const [categoryId, setCategoryId] = useState(existing?.categoryId ?? data.categories[0]?.id);
-  const [date, setDate] = useState(existing?.date ?? params.date ?? todayISO());
-  const [installments, setInstallments] = useState(existing?.installments ?? 1);
-  const [paymentKey, setPaymentKey] = useState(() =>
-    paymentToKey(
-      existing?.payment ??
-        lastPayment ??
-        (data.cards[0] ? { kind: 'credit', cardId: data.cards[0].id } : { kind: 'debit' }),
-    ),
+  const [description, setDescription] = useState(source?.description ?? draft?.description ?? '');
+  const [categoryId, setCategoryId] = useState(
+    source?.categoryId ?? draft?.categoryId ?? (draft ? undefined : data.categories[0]?.id),
   );
+  const [date, setDate] = useState(existing?.date ?? draft?.date ?? params.date ?? todayISO());
+  const [installments, setInstallments] = useState(source?.installments ?? draft?.installments ?? 1);
+  const [paymentKey, setPaymentKey] = useState(() =>
+    source
+      ? paymentToKey(source.payment)
+      : (draft?.paymentKey ??
+        paymentToKey(
+          lastPayment ?? (data.cards[0] ? { kind: 'credit', cardId: data.cards[0].id } : { kind: 'debit' }),
+        )),
+  );
+  // Once the user picks category/payment by hand, suggestions stop overriding them.
+  const [touched, setTouched] = useState({
+    category: !!source || !!draft?.categoryId,
+    payment: !!source || !!draft?.paymentKey,
+  });
+  const [suggested, setSuggested] = useState<string | null>(null);
+
+  /** Updates the description and fills category/payment from history (or keywords). */
+  const changeDescription = (text: string) => {
+    setDescription(text);
+    const fromHistory = suggestFromHistory(index, text);
+    const notes: string[] = [];
+    if (!touched.category) {
+      const byHistory =
+        fromHistory && data.categories.some((c) => c.id === fromHistory.categoryId) ? fromHistory.categoryId : undefined;
+      const next = byHistory ?? suggestByKeywords(text, data.categories);
+      if (next && next !== categoryId) {
+        setCategoryId(next);
+        notes.push('categoria');
+      }
+    }
+    if (!touched.payment && fromHistory && fromHistory.paymentKey !== paymentKey) {
+      setPaymentKey(fromHistory.paymentKey);
+      notes.push('pagamento');
+    }
+    if (notes.length) setSuggested(`${notes.join(' e ')} sugerid${notes.length > 1 ? 'os' : 'a'} pelo seu histórico`);
+  };
+  const completions = useMemo(() => autocomplete(index, description), [index, description]);
 
   const payment = keyToPayment(paymentKey);
   const isCredit = payment.kind === 'credit';
@@ -115,7 +157,16 @@ export default function ExpenseForm() {
 
   return (
     <FormScreen>
-      <Stack.Screen options={{ title: existing ? 'Editar gasto' : 'Novo gasto' }} />
+      <Stack.Screen options={{ title: existing ? 'Editar gasto' : repeated ? 'Repetir gasto' : 'Novo gasto' }} />
+      {!existing ? (
+        <Button
+          label="Digitar em uma frase"
+          icon="sparkles"
+          variant="secondary"
+          compact
+          onPress={() => router.replace('/assistant')}
+        />
+      ) : null}
       <AmountInput
         label={count > 1 ? (amountMode === 'total' ? 'Valor total' : 'Valor de cada parcela') : 'Valor'}
         value={amount}
@@ -123,7 +174,15 @@ export default function ExpenseForm() {
         autoFocus={!existing}
       />
 
-      <Chips label="Pagamento" options={paymentOptions(data.cards)} value={paymentKey} onChange={setPaymentKey} />
+      <Chips
+        label="Pagamento"
+        options={paymentOptions(data.cards)}
+        value={paymentKey}
+        onChange={(k) => {
+          setPaymentKey(k);
+          setTouched((t) => ({ ...t, payment: true }));
+        }}
+      />
       {data.cards.length === 0 ? (
         <Button label="Cadastrar um cartão de crédito" variant="ghost" compact onPress={() => router.push('/card')} />
       ) : null}
@@ -152,16 +211,43 @@ export default function ExpenseForm() {
       <Field
         label="Descrição"
         value={description}
-        onChangeText={setDescription}
+        onChangeText={changeDescription}
         placeholder={category ? `Ex.: ${category.name}` : 'Ex.: Mercado'}
       />
+      {completions.length ? (
+        <View style={styles.completions}>
+          {completions.map((c) => (
+            <Pressable
+              key={c.description}
+              accessibilityRole="button"
+              onPress={() => {
+                changeDescription(c.description);
+                if (!amount) setAmount(centsToInput(c.lastAmount));
+              }}
+              style={({ pressed }) => [styles.completion, { backgroundColor: theme.primarySoft }, pressed && styles.pressed]}>
+              <ThemedText type="caption" style={{ color: theme.accent }}>
+                {c.description} · {formatBRL(c.lastAmount)}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       <Chips
         label="Categoria"
         options={data.categories.map((c) => ({ value: c.id, label: c.name, color: c.color, icon: categoryIcon(c) }))}
         value={categoryId}
-        onChange={setCategoryId}
+        onChange={(id) => {
+          setCategoryId(id);
+          setTouched((t) => ({ ...t, category: true }));
+          setSuggested(null);
+        }}
       />
+      {suggested ? (
+        <ThemedText type="caption" themeColor="textSecondary">
+          ✨ {suggested.charAt(0).toUpperCase() + suggested.slice(1)}.
+        </ThemedText>
+      ) : null}
       {left !== null && category ? (
         <ThemedText type="small" style={{ color: left < 0 ? theme.danger : theme.textSecondary }}>
           {left < 0
@@ -200,7 +286,21 @@ export default function ExpenseForm() {
       ) : null}
 
       <Button label="Salvar" onPress={save} disabled={!canSave} />
+      {existing ? (
+        <Button
+          label="Repetir para hoje"
+          icon="repeat"
+          variant="secondary"
+          onPress={() => router.replace({ pathname: '/expense', params: { repeat: existing.id } })}
+        />
+      ) : null}
       {existing ? <Button label="Excluir gasto" variant="danger" onPress={remove} /> : null}
     </FormScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  completions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: -Spacing.one },
+  completion: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
+  pressed: { opacity: 0.6 },
+});

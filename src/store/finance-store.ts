@@ -9,6 +9,7 @@ import { cycleFor, shiftCycle } from '@/domain/cycle';
 import { todayISO } from '@/domain/dates';
 import { DATA_VERSION, migrateData } from '@/domain/migrate';
 import type {
+  AiModel,
   Agreement,
   Category,
   CreditCard,
@@ -38,6 +39,8 @@ interface FinanceActions {
   setDailySummary: (settings: Partial<DailySummarySettings>) => void;
   /** Registra que um backup foi exportado agora. */
   markBackupExported: (at: string) => void;
+  /** Chooses the Claude model used by the AI features. */
+  setAiModel: (model: AiModel) => void;
   /** Substitui todos os dados (importar backup). */
   replaceAll: (data: FinanceData) => void;
   saveCategory: (draft: Draft<Category>) => void;
@@ -46,7 +49,10 @@ interface FinanceActions {
   deleteFixedBill: (id: ID) => void;
   saveCard: (draft: Draft<CreditCard>) => void;
   deleteCard: (id: ID) => void;
-  saveExpense: (draft: Draft<Expense>) => void;
+  /** Saves an expense and returns its id (used for "undo"). */
+  saveExpense: (draft: Draft<Expense>) => ID;
+  /** Saves many expenses at once (bank import). */
+  addExpenses: (drafts: Draft<Expense>[]) => void;
   deleteExpense: (id: ID) => void;
   saveIncome: (draft: Draft<Income>) => void;
   deleteIncome: (id: ID) => void;
@@ -77,13 +83,17 @@ export function newId(): ID {
 
 const nowStamp = () => new Date().toISOString();
 
-function upsert<T extends Entity>(list: T[], draft: Draft<T>): T[] {
+/**
+ * Inserts or updates an entity by id, stamping createdAt/updatedAt.
+ * @param id Id to use when inserting (defaults to a new one).
+ */
+function upsert<T extends Entity>(list: T[], draft: Draft<T>, id: ID = draft.id ?? newId()): T[] {
   const now = nowStamp();
-  const existing = draft.id ? list.find((x) => x.id === draft.id) : undefined;
+  const existing = list.find((x) => x.id === id);
   if (existing) {
-    return list.map((x) => (x.id === existing.id ? ({ ...existing, ...draft, updatedAt: now } as T) : x));
+    return list.map((x) => (x.id === existing.id ? ({ ...existing, ...draft, id, updatedAt: now } as T) : x));
   }
-  return [...list, { ...draft, id: newId(), createdAt: now, updatedAt: now } as T];
+  return [...list, { ...draft, id, createdAt: now, updatedAt: now } as T];
 }
 
 function toggleIn<T>(list: T[] | undefined, value: T): T[] {
@@ -129,6 +139,7 @@ export const useFinance = create<FinanceState>()(
 
       setSalary: (salary) => set((s) => ({ settings: { ...s.settings, salary } })),
       setCycleStartDay: (cycleStartDay) => set((s) => ({ settings: { ...s.settings, cycleStartDay } })),
+      setAiModel: (aiModel) => set((s) => ({ settings: { ...s.settings, aiModel } })),
       markBackupExported: (at) => set((s) => ({ settings: { ...s.settings, lastBackupAt: at } })),
       replaceAll: (data) =>
         set({
@@ -158,7 +169,13 @@ export const useFinance = create<FinanceState>()(
       saveCard: (draft) => set((s) => ({ cards: upsert(s.cards, draft) })),
       deleteCard: (id) => set((s) => ({ cards: s.cards.filter((c) => c.id !== id) })),
 
-      saveExpense: (draft) => set((s) => ({ expenses: upsert(s.expenses, draft) })),
+      saveExpense: (draft) => {
+        const id = draft.id ?? newId();
+        set((s) => ({ expenses: upsert(s.expenses, draft, id) }));
+        return id;
+      },
+      addExpenses: (drafts) =>
+        set((s) => ({ expenses: drafts.reduce((list, d) => upsert(list, d), s.expenses) })),
       deleteExpense: (id) => set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) })),
 
       saveIncome: (draft) => set((s) => ({ incomes: upsert(s.incomes, draft) })),
