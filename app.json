@@ -8,7 +8,8 @@
     "scheme": "financeapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.paulovictor.finance"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.financeapp"
+      "package": "com.paulovictor.finance"
     },
     "web": {
       "output": "server",
@@ -35,7 +36,14 @@
         }
       ],
       "expo-sharing",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#5B57E8"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
