@@ -3,13 +3,14 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { LoadError } from '@/components/load-error';
 import { SplashOverlay } from '@/components/splash-overlay';
 import { UpdateBanner } from '@/components/update-banner';
 import { Colors } from '@/constants/theme';
 import { todayISO } from '@/domain/dates';
 import { useDailySummaryScheduler } from '@/notifications/use-daily-summary-scheduler';
 import { useNotificationRouting } from '@/notifications/use-notification-routing';
-import { useFinance, useHydrated } from '@/store/finance-store';
+import { useFinance, useHydrated, useHydrationError } from '@/store/finance-store';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,7 +34,14 @@ function navigationTheme(dark: boolean) {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const hydrated = useHydrated();
+  const loadError = useHydrationError();
   const closeCycles = useFinance((s) => s.closeCycles);
+
+  // Last-resort safety net: never leave the native splash up, whatever happens in JS.
+  useEffect(() => {
+    const timer = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 6000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Ao abrir o app, salva a "foto" dos ciclos que terminaram (histórico e poupança).
   useEffect(() => {
@@ -67,7 +75,8 @@ export default function RootLayout() {
         </Stack>
       ) : null}
       {hydrated ? <UpdateBanner /> : null}
-      <SplashOverlay ready={hydrated} />
+      {!hydrated && loadError ? <LoadError error={loadError} /> : null}
+      <SplashOverlay ready={hydrated || !!loadError} />
     </ThemeProvider>
   );
 }

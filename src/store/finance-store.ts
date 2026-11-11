@@ -255,6 +255,10 @@ export const useFinance = create<FinanceState>()(
         snapshots: s.snapshots,
       }),
       migrate: (persisted, version) => migrateData(persisted, version),
+      // zustand never reports "hydrated" when loading fails; record the error so the UI can show it.
+      onRehydrateStorage: () => (_state, error) => {
+        setHydrationError(error ?? null);
+      },
     },
   ),
 );
@@ -288,6 +292,35 @@ export function useFinanceData(): FinanceData {
     }),
     [settings, categories, fixedBills, cards, expenses, incomes, receivables, agreements, fixedPaid, invoicePaid, snapshots],
   );
+}
+
+let hydrationError: unknown = null;
+const hydrationErrorListeners = new Set<() => void>();
+
+function setHydrationError(error: unknown) {
+  hydrationError = error;
+  hydrationErrorListeners.forEach((l) => l());
+}
+
+/**
+ * Error raised while loading the data saved on the device, if any.
+ * @returns The error, or null while loading or after a successful load.
+ */
+export function useHydrationError(): unknown {
+  return useSyncExternalStore(
+    (onChange) => {
+      hydrationErrorListeners.add(onChange);
+      return () => hydrationErrorListeners.delete(onChange);
+    },
+    () => hydrationError,
+    () => null,
+  );
+}
+
+/** Retries loading the data saved on the device (after a load error). */
+export async function retryHydration(): Promise<void> {
+  setHydrationError(null);
+  await useFinance.persist.rehydrate();
 }
 
 /** true depois que os dados salvos no aparelho foram carregados. */
