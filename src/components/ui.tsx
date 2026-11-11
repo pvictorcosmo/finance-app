@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import {
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -17,17 +18,19 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useSeriesColor } from '@/constants/series-colors';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
 import { useTheme } from '@/hooks/use-theme';
 
-/** Barra de abas da web (expo-router/ui), que fica por cima do conteúdo. */
+/** Web tab bar height (expo-router/ui), drawn over the content. */
 const WEB_TAB_BAR = 76;
 
 /**
- * Distância do botão flutuante até o fundo da tela da aba, logo acima da barra de abas.
- * - Android: as abas nativas já colocam o conteúdo acima da barra (SafeAreaView automático),
- *   então basta uma margem.
- * - iOS: o conteúdo passa por trás da barra, mas a área segura inferior já inclui a altura dela.
- * - Web: a barra é desenhada por cima do conteúdo.
+ * Distance from the floating button to the bottom of a tab screen, right above the tab bar.
+ * - Android: native tabs already lay the content out above the bar (automatic SafeAreaView),
+ *   so a margin is enough.
+ * - iOS: content goes under the bar, but the bottom safe-area inset already includes its height.
+ * - Web: the bar is drawn over the content.
+ * @param safeBottom Bottom safe-area inset.
  */
 function fabBottom(safeBottom: number): number {
   return Platform.select({
@@ -37,7 +40,26 @@ function fabBottom(safeBottom: number): number {
   });
 }
 
-/** Tela de aba: título grande, ação opcional à direita, rolagem e botão flutuante. */
+/**
+ * "Pull to refresh" spinner in the app colors: syncs pending changes with the cloud
+ * and checks for an over-the-air update (see `refreshApp` in hooks/use-pull-to-refresh).
+ */
+export function AppRefreshControl() {
+  const theme = useTheme();
+  const { refreshing, onRefresh } = usePullToRefresh();
+  return (
+    <RefreshControl
+      testID="pull-to-refresh"
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      tintColor={theme.primary}
+      colors={[theme.primary]}
+      progressBackgroundColor={theme.backgroundElement}
+    />
+  );
+}
+
+/** Tab screen: large title, optional action on the right, scrolling, pull to refresh and a floating button. */
 export function Screen({
   title,
   subtitle,
@@ -56,9 +78,10 @@ export function Screen({
     <ThemedView style={styles.flex}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        refreshControl={<AppRefreshControl />}
         contentContainerStyle={[
           styles.content,
-          // Espaço no fim da lista para o botão flutuante não cobrir o último item.
+          // Room at the end so the floating button does not cover the last item.
           { paddingTop: insets.top + Spacing.four, paddingBottom: fabBottom(insets.bottom) + 80 },
         ]}>
         <Row style={styles.screenHeader}>
@@ -79,13 +102,14 @@ export function Screen({
   );
 }
 
-/** Tela de formulário (abre como modal, com header do Stack). */
+/** Form screen (opened as a modal with the Stack header), with pull to refresh. */
 export function FormScreen({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
   return (
     <ThemedView style={styles.flex}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        refreshControl={<AppRefreshControl />}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.five }]}>
         {children}
       </ScrollView>

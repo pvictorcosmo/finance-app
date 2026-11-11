@@ -7,19 +7,7 @@ import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-
-/**
- * Checks EAS Update for a new version and downloads it in the background.
- * Errors are ignored: being offline must never break the app.
- */
-async function fetchLatest(): Promise<void> {
-  try {
-    const check = await Updates.checkForUpdateAsync();
-    if (check.isAvailable) await Updates.fetchUpdateAsync();
-  } catch {
-    // Offline or server unavailable: try again next time the app comes to the foreground.
-  }
-}
+import { fetchLatestUpdate } from '@/updates/fetch-latest';
 
 /**
  * Over-the-air updates: checks for a new version whenever the app returns to the
@@ -35,7 +23,7 @@ export function UpdateBanner() {
   useEffect(() => {
     if (!Updates.isEnabled) return;
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void fetchLatest();
+      if (state === 'active') void fetchLatestUpdate();
     });
     return () => sub.remove();
   }, []);

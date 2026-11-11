@@ -8,7 +8,7 @@ import { useHasApiKey } from '@/ai/key-store';
 import { categoryIcon, Icon, IconBadge } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Button, Row } from '@/components/ui';
+import { AppRefreshControl, Button, Row } from '@/components/ui';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { formatShort, relativeDays, todayISO } from '@/domain/dates';
 import { formatBRL } from '@/domain/money';
@@ -153,6 +153,7 @@ export default function AssistantScreen() {
         <ScrollView
           ref={scroll}
           keyboardShouldPersistTaps="handled"
+          refreshControl={<AppRefreshControl />}
           contentContainerStyle={styles.messages}
           onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}>
           {hasKey === false ? (
