@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { SplashOverlay } from '@/components/splash-overlay';
+import { UpdateBanner } from '@/components/update-banner';
 import { Colors } from '@/constants/theme';
 import { todayISO } from '@/domain/dates';
 import { useDailySummaryScheduler } from '@/notifications/use-daily-summary-scheduler';
@@ -65,6 +66,7 @@ export default function RootLayout() {
           <Stack.Screen name="history" options={{ title: 'Histórico e poupança' }} />
         </Stack>
       ) : null}
+      {hydrated ? <UpdateBanner /> : null}
       <SplashOverlay ready={hydrated} />
     </ThemeProvider>
   );

@@ -1,7 +1,11 @@
-# On every push to `master`: run the test workflow and, if it passes, queue an
-# Android APK build on EAS (profile "preview" in eas.json).
+# On every push to `master`: run the test workflow and, if it passes, deploy to the
+# Android app installed from EAS (build profile / channel "preview"):
+#   1. Compute the native fingerprint. If no EAS build exists for it yet (a native
+#      library changed, or first run), queue a new APK build.
+#   2. Always publish an over-the-air update (EAS Update). Installed apps download it
+#      on their own; apps whose native fingerprint differs simply ignore it.
 # Requires the repository secret EXPO_TOKEN (expo.dev → Account settings → Access tokens).
-name: Build EAS (Android)
+name: Deploy (Android)
 
 on:
   push:
@@ -9,16 +13,19 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: eas-build-master
+  group: deploy-master
   cancel-in-progress: false
+
+env:
+  PROFILE: preview
 
 jobs:
   tests:
     name: Testes
     uses: ./.github/workflows/tests.yml
 
-  build:
-    name: Build APK no EAS
+  deploy:
+    name: Build (se preciso) e atualização OTA
     needs: tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -51,7 +58,43 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # --no-wait: the build runs on EAS servers; the job only queues it, so it does not
-      # spend GitHub Actions minutes waiting. Follow progress on expo.dev.
-      - name: Queue Android build
-        run: eas build --platform android --profile preview --non-interactive --no-wait
+      - name: Native fingerprint
+        id: fingerprint
+        run: |
+          HASH=$(eas fingerprint:generate --platform android --build-profile "$PROFILE" --json --non-interactive \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).hash))")
+          echo "Fingerprint: $HASH"
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Find a compatible build
+        id: existing
+        run: |
+          COUNT=$(eas build:list --platform android --build-profile "$PROFILE" \
+              --fingerprint-hash "${{ steps.fingerprint.outputs.hash }}" --limit 20 --json --non-interactive \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const ok=['NEW','IN_QUEUE','IN_PROGRESS','PENDING_CANCEL','FINISHED'];console.log(JSON.parse(d||'[]').filter(b=>ok.includes(b.status)).length)})")
+          echo "Builds with this fingerprint: $COUNT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      # --no-wait: the build runs on EAS servers; the job only queues it.
+      - name: Queue APK build (native code changed)
+        if: steps.existing.outputs.count == '0'
+        run: eas build --platform android --profile "$PROFILE" --non-interactive --no-wait
+
+      - name: Publish OTA update
+        env:
+          MESSAGE: ${{ github.event.head_commit.message || 'Deploy manual' }}
+        run: |
+          eas update --channel "$PROFILE" --environment "$PROFILE" --platform android \
+            --message "$(printf '%s' "$MESSAGE" | head -n 1)" --non-interactive
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deploy Android"
+            echo "- Fingerprint: \`${{ steps.fingerprint.outputs.hash }}\`"
+            if [ "${{ steps.existing.outputs.count }}" = "0" ]; then
+              echo "- Novo APK enfileirado no EAS (código nativo mudou). Instale-o por cima do atual."
+            else
+              echo "- Nenhum APK novo necessário: o app instalado recebe a atualização OTA sozinho."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
