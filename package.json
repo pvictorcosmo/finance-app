@@ -57,8 +57,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest",
-    "test:watch": "jest --watch",
-    "check:deps": "node scripts/check-dev-deps.js"
+    "test:watch": "jest --watch"
   },
   "private": true,
   "jest": {
