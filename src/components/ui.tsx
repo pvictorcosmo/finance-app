@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TextInput,
   View,
+  type RefreshControlProps,
   type StyleProp,
   type TextInputProps,
   type ViewStyle,
@@ -43,12 +44,18 @@ function fabBottom(safeBottom: number): number {
 /**
  * "Pull to refresh" spinner in the app colors: syncs pending changes with the cloud
  * and checks for an over-the-air update (see `refreshApp` in hooks/use-pull-to-refresh).
+ *
+ * Forwards every prop (including `style` and `children`) to `RefreshControl`: on Android,
+ * ScrollView renders itself *inside* this element via `cloneElement`, so dropping the
+ * children would leave the screen empty.
+ * @param props Props injected by ScrollView (style, children).
  */
-export function AppRefreshControl() {
+export function AppRefreshControl(props: Omit<RefreshControlProps, 'refreshing' | 'onRefresh'>) {
   const theme = useTheme();
   const { refreshing, onRefresh } = usePullToRefresh();
   return (
     <RefreshControl
+      {...props}
       testID="pull-to-refresh"
       refreshing={refreshing}
       onRefresh={onRefresh}
