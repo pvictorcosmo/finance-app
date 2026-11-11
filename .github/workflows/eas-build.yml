@@ -1,0 +1,57 @@
+# On every push to `master`: run the test workflow and, if it passes, queue an
+# Android APK build on EAS (profile "preview" in eas.json).
+# Requires the repository secret EXPO_TOKEN (expo.dev → Account settings → Access tokens).
+name: Build EAS (Android)
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: eas-build-master
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: Testes
+    uses: ./.github/workflows/tests.yml
+
+  build:
+    name: Build APK no EAS
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Check EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Secret EXPO_TOKEN não configurado. Crie em expo.dev (Access tokens) e adicione em Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # --no-wait: the build runs on EAS servers; the job only queues it, so it does not
+      # spend GitHub Actions minutes waiting. Follow progress on expo.dev.
+      - name: Queue Android build
+        run: eas build --platform android --profile preview --non-interactive --no-wait
