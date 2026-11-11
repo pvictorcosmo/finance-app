@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { categoryIcon } from '@/components/icon';
 import { AmountInput, Button, Card, Chips, DayStepper, Field, FormScreen } from '@/components/ui';
 import { computeBudget } from '@/domain/budget';
-import { expenseCharges, installmentCount } from '@/domain/charges';
+import { budgetDate, expenseCharges, installmentCount } from '@/domain/charges';
 import { cycleFor } from '@/domain/cycle';
 import { formatMonthYear, formatShort, todayISO } from '@/domain/dates';
 import { centsToInput, formatBRL, parseMoney } from '@/domain/money';
@@ -108,7 +108,8 @@ export default function ExpenseForm() {
     };
     const charges = expenseCharges(draft, data.cards);
 
-    const cycle = cycleFor(date, data.settings.cycleStartDay);
+    // The category impact is shown for the cycle the (first) charge weighs on.
+    const cycle = cycleFor(budgetDate(charges[0], data.settings.cardBudgetBasis), data.settings.cycleStartDay);
     const others = { ...data, expenses: [...data.expenses.filter((e) => e.id !== existing?.id), draft] };
     const status = computeBudget(others, cycle, todayISO()).categories.find((c) => c.category.id === categoryId);
     return { charges, status };

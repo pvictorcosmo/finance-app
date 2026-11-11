@@ -1,6 +1,6 @@
 import { addMonths, addMonthsISO, parseISO } from './dates';
 import { invoiceDatesForDueMonth, invoiceForPurchase } from './invoice';
-import type { Cents, CreditCard, Expense, ID, ISODate, PaymentMethod } from './types';
+import type { CardBudgetBasis, Cents, CreditCard, Expense, ID, ISODate, PaymentMethod } from './types';
 
 /**
  * Uma cobrança concreta. Uma compra à vista gera uma; uma compra em 10x gera dez,
@@ -22,6 +22,16 @@ export interface Charge {
   invoiceDue?: ISODate;
   /** De onde veio: uma compra (padrão) ou o Y de um acordo mensal (fora do orçamento). */
   source?: 'expense' | 'agreement';
+}
+
+/**
+ * Date on which a charge weighs on the budget.
+ * @param charge The charge.
+ * @param basis `due` (default): card charges count on their invoice due date; `purchase`: on the purchase date.
+ * @returns The invoice due date for card charges under `due`, otherwise the charge date.
+ */
+export function budgetDate(charge: Charge, basis: CardBudgetBasis = 'due'): ISODate {
+  return basis === 'due' && charge.invoiceDue ? charge.invoiceDue : charge.date;
 }
 
 /** Divide o total em `n` parcelas inteiras; os centavos que sobram vão na primeira. */

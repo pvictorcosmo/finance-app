@@ -1,7 +1,7 @@
 import { computeBudget } from '../budget';
 import { cycleFor } from '../cycle';
 import { cycleHistory, savingsTotal } from '../history';
-import { makeCategory, makeData, makeExpense, makeFixedBill, makeIncome } from '@/test-utils/factories';
+import { makeCard, makeCategory, makeData, makeExpense, makeFixedBill, makeIncome } from '@/test-utils/factories';
 
 describe('computeBudget', () => {
   const data = makeData({
@@ -79,5 +79,46 @@ describe('cycleHistory / savings', () => {
 
   it('sums leftovers of closed cycles into savings', () => {
     expect(savingsTotal(cycleHistory(data, '2026-11-03'))).toBe(120000);
+  });
+});
+
+describe('card purchases and budget cycles', () => {
+  // Card closes on the 20th and is due on the 30th: a purchase on 28/10 is paid on 30/11.
+  const card = makeCard({ id: 'itau', closingDay: 20, dueDay: 30 });
+  const base = makeData({
+    settings: { salary: 300000, cycleStartDay: 1, startedAt: '2026-08-01' },
+    categories: [makeCategory({ id: 'almoco', limitValue: 60000 })],
+    cards: [card],
+    expenses: [
+      makeExpense({ id: 'card', amount: 3000, date: '2026-10-28', categoryId: 'almoco', payment: { kind: 'credit', cardId: 'itau' } }),
+      makeExpense({ id: 'pix', amount: 1000, date: '2026-10-28', categoryId: 'almoco' }),
+    ],
+  });
+  const spentIn = (data: typeof base, date: string) => computeBudget(data, cycleFor(date, 1), date).spent;
+
+  it('counts card purchases in the cycle where the invoice is due (default)', () => {
+    expect(spentIn(base, '2026-10-29')).toBe(1000); // only the Pix in October
+    expect(spentIn(base, '2026-11-05')).toBe(3000); // the card lunch is paid in November
+  });
+
+  it('can count card purchases on the purchase date instead', () => {
+    const byPurchase = { ...base, settings: { ...base.settings, cardBudgetBasis: 'purchase' as const } };
+    expect(spentIn(byPurchase, '2026-10-29')).toBe(4000);
+    expect(spentIn(byPurchase, '2026-11-05')).toBe(0);
+  });
+
+  it('spreads installments over the cycles of each invoice', () => {
+    const tv = makeExpense({
+      id: 'tv',
+      amount: 30000,
+      date: '2026-10-28',
+      categoryId: 'almoco',
+      payment: { kind: 'credit', cardId: 'itau' },
+      installments: 3,
+    });
+    const data = { ...base, expenses: [tv] };
+    expect(['2026-10-29', '2026-11-05', '2026-12-05', '2027-01-05', '2027-02-05'].map((d) => spentIn(data, d))).toEqual([
+      0, 10000, 10000, 10000, 0,
+    ]);
   });
 });

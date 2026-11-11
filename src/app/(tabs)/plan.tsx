@@ -6,7 +6,8 @@ import { AiSettings } from '@/components/ai-settings';
 import { BackupSettings } from '@/components/backup-settings';
 import { DailySummarySettings } from '@/components/daily-summary-settings';
 import { categoryIcon } from '@/components/icon';
-import { Button, Card, DayStepper, Field, KeyValue, ListItem, Screen, SectionHeader } from '@/components/ui';
+import { Button, Card, Chips, DayStepper, Field, KeyValue, ListItem, Screen, SectionHeader } from '@/components/ui';
+import type { CardBudgetBasis } from '@/domain/types';
 import { categoryLimit, incomesInCycle } from '@/domain/budget';
 import { cycleFor } from '@/domain/cycle';
 import { formatShort, parseISO, todayISO } from '@/domain/dates';
@@ -21,6 +22,7 @@ export default function PlanScreen() {
   const data = useFinanceData();
   const setSalary = useFinance((s) => s.setSalary);
   const setCycleStartDay = useFinance((s) => s.setCycleStartDay);
+  const setCardBudgetBasis = useFinance((s) => s.setCardBudgetBasis);
   const { salary, cycleStartDay } = data.settings;
 
   const [salaryText, setSalaryText] = useState(salary ? centsToInput(salary) : '');
@@ -59,6 +61,20 @@ export default function PlanScreen() {
           onChange={setCycleStartDay}
           hint={`Ciclo atual: ${formatShort(cycle.start)} a ${formatShort(cycle.end)}. Use o dia em que você recebe.`}
         />
+        <Chips
+          label="Compras no cartão contam no ciclo"
+          options={[
+            { value: 'due', label: 'Do vencimento da fatura' },
+            { value: 'purchase', label: 'Da data da compra' },
+          ]}
+          value={data.settings.cardBudgetBasis ?? 'due'}
+          onChange={(basis) => setCardBudgetBasis(basis as CardBudgetBasis)}
+        />
+        <ThemedText type="caption" themeColor="textSecondary">
+          {(data.settings.cardBudgetBasis ?? 'due') === 'due'
+            ? 'Ex.: um almoço no cartão em 28/10 com fatura vencendo em 30/11 entra no ciclo de novembro, quando o dinheiro sai. Pix, débito e dinheiro contam na data do gasto.'
+            : 'Cada compra conta no ciclo em que foi feita, mesmo que a fatura seja paga depois.'}
+        </ThemedText>
       </Card>
 
       <Card>

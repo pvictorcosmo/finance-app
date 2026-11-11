@@ -10,6 +10,7 @@ import { todayISO } from '@/domain/dates';
 import { DATA_VERSION, migrateData } from '@/domain/migrate';
 import type {
   AiModel,
+  CardBudgetBasis,
   Agreement,
   Category,
   CreditCard,
@@ -41,6 +42,8 @@ interface FinanceActions {
   markBackupExported: (at: string) => void;
   /** Chooses the Claude model used by the AI features. */
   setAiModel: (model: AiModel) => void;
+  /** Chooses whether card purchases count on the invoice due date or the purchase date. */
+  setCardBudgetBasis: (basis: CardBudgetBasis) => void;
   /** Substitui todos os dados (importar backup). */
   replaceAll: (data: FinanceData) => void;
   saveCategory: (draft: Draft<Category>) => void;
@@ -140,6 +143,7 @@ export const useFinance = create<FinanceState>()(
       setSalary: (salary) => set((s) => ({ settings: { ...s.settings, salary } })),
       setCycleStartDay: (cycleStartDay) => set((s) => ({ settings: { ...s.settings, cycleStartDay } })),
       setAiModel: (aiModel) => set((s) => ({ settings: { ...s.settings, aiModel } })),
+      setCardBudgetBasis: (cardBudgetBasis) => set((s) => ({ settings: { ...s.settings, cardBudgetBasis } })),
       markBackupExported: (at) => set((s) => ({ settings: { ...s.settings, lastBackupAt: at } })),
       replaceAll: (data) =>
         set({

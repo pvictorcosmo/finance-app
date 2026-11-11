@@ -30,7 +30,15 @@ export interface Settings {
   lastBackupAt?: string;
   /** Claude model used by the AI features. */
   aiModel?: AiModel;
+  /** Which cycle credit card purchases count in (default: the invoice due date). */
+  cardBudgetBasis?: CardBudgetBasis;
 }
+
+/**
+ * `due`: a card purchase weighs on the cycle in which its invoice is due (when the money
+ * actually leaves). `purchase`: it weighs on the cycle of the purchase date.
+ */
+export type CardBudgetBasis = 'due' | 'purchase';
 
 /** Claude models the user can pick for the AI features. */
 export type AiModel = 'claude-opus-5-5' | 'claude-haiku-5-5';

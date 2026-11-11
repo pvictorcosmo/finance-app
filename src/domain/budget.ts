@@ -1,7 +1,7 @@
-import { allCharges, type Charge } from './charges';
+import { allCharges, budgetDate, type Charge } from './charges';
 import { dueDateInCycle, elapsedDays, isInCycle, type Cycle } from './cycle';
 import { parseISO } from './dates';
-import type { Cents, FinanceData, Income, ISODate, PlanCategory } from './types';
+import type { CardBudgetBasis, Cents, FinanceData, Income, ISODate, PlanCategory } from './types';
 
 export type CategoryHealth = 'ok' | 'attention' | 'over' | 'unset';
 
@@ -107,8 +107,14 @@ export function incomesInCycle(incomes: Income[], cycle: Cycle) {
   return { toBudget, toSavings, items };
 }
 
-export function chargesInCycle(charges: Charge[], cycle: Cycle): Charge[] {
-  return charges.filter((c) => isInCycle(c.date, cycle));
+/**
+ * Charges that weigh on a cycle.
+ * @param charges All charges.
+ * @param cycle The cycle.
+ * @param basis Whether card charges count on the invoice due date (default) or the purchase date.
+ */
+export function chargesInCycle(charges: Charge[], cycle: Cycle, basis: CardBudgetBasis = 'due'): Charge[] {
+  return charges.filter((c) => isInCycle(budgetDate(c, basis), cycle));
 }
 
 export function computeBudget(
@@ -125,7 +131,7 @@ export function computeBudget(
   const progress = elapsed / cycle.days;
   const daysLeft = Math.max(1, cycle.days - elapsed + 1);
 
-  const cycleCharges = chargesInCycle(charges, cycle);
+  const cycleCharges = chargesInCycle(charges, cycle, data.settings.cardBudgetBasis);
   const spentBy = new Map<string, Cents>();
   let spent = 0;
   for (const c of cycleCharges) {
