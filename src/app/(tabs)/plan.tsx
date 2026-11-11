@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { AiSettings } from '@/components/ai-settings';
 import { BackupSettings } from '@/components/backup-settings';
+import { CloudSyncSettings } from '@/components/cloud-sync-settings';
 import { DailySummarySettings } from '@/components/daily-summary-settings';
 import { categoryIcon } from '@/components/icon';
 import { Button, Card, Chips, DayStepper, Field, KeyValue, ListItem, Screen, SectionHeader } from '@/components/ui';
@@ -43,6 +44,9 @@ export default function PlanScreen() {
 
   return (
     <Screen title="Planejar" subtitle="Salário − contas fixas = o que você divide entre as categorias">
+      <SectionHeader title="Conta e nuvem" />
+      <CloudSyncSettings />
+
       <SectionHeader title="Renda e ciclo" />
       <Card>
         <Field

@@ -10,6 +10,7 @@ import { Colors } from '@/constants/theme';
 import { todayISO } from '@/domain/dates';
 import { useDailySummaryScheduler } from '@/notifications/use-daily-summary-scheduler';
 import { useNotificationRouting } from '@/notifications/use-notification-routing';
+import { useCloudSync } from '@/sync/use-cloud-sync';
 import { useFinance, useHydrated, useHydrationError } from '@/store/finance-store';
 
 SplashScreen.preventAutoHideAsync();
@@ -51,6 +52,8 @@ export default function RootLayout() {
   // Resumo diário por notificação, sempre com os dados mais recentes.
   useDailySummaryScheduler(hydrated);
   useNotificationRouting(hydrated);
+  // Cloud sync (local-first): runs while a user is signed in.
+  useCloudSync(hydrated);
 
   return (
     <ThemeProvider value={navigationTheme(colorScheme === 'dark')}>
