@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Fragment, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -56,6 +56,23 @@ export default function StatementScreen() {
   const [maxText, setMaxText] = useState('');
   const [visible, setVisible] = useState(PAGE);
   const [selectedMonth, setSelectedMonth] = useState<string | undefined>();
+
+  // Opened from Home with a category/purchase: apply it once per navigation (`at` changes each time).
+  const params = useLocalSearchParams<{ category?: string; q?: string; at?: string }>();
+  const [appliedAt, setAppliedAt] = useState<string | undefined>();
+  if (params.at && params.at !== appliedAt) {
+    setAppliedAt(params.at);
+    setFilters({
+      ...EMPTY_FILTERS,
+      query: params.q ?? '',
+      categoryIds: params.category ? [params.category] : [],
+    });
+    setMinText('');
+    setMaxText('');
+    setVisible(PAGE);
+    setSelectedMonth(undefined);
+    setShowFilters(false);
+  }
 
   const charges = useMemo(() => allCharges(data.expenses, data.cards), [data.expenses, data.cards]);
   const result = useMemo(() => searchCharges(data, charges, filters, today), [data, charges, filters, today]);

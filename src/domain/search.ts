@@ -1,10 +1,13 @@
+import { merchantTotals, type MerchantTotal } from './breakdown';
 import type { Charge } from './charges';
 import { cycleFor } from './cycle';
 import { addDays, addMonthsISO, MONTHS_SHORT, parseISO } from './dates';
 import { parseMoney } from './money';
 import { paymentLabel, paymentToKey, type PaymentKey } from './payment';
-import { merchantKey, normalize } from './text';
+import { normalize } from './text';
 import type { Cents, FinanceData, ID, ISODate } from './types';
+
+export type { MerchantTotal };
 
 /** Period presets of the statement screen. */
 export type PeriodPreset = 'cycle' | '3m' | '6m' | '12m' | 'all';
@@ -112,11 +115,6 @@ export interface MonthTotal {
   total: Cents;
 }
 
-export interface MerchantTotal {
-  name: string;
-  total: Cents;
-  count: number;
-}
 
 export interface SearchResult {
   /** Matching charges, newest first. */
@@ -167,7 +165,7 @@ export function searchCharges(data: FinanceData, charges: Charge[], filters: Sea
     count: items.length,
     average: items.length ? Math.round(total / items.length) : 0,
     byMonth: monthTotals(items, from, to),
-    topMerchants: merchantTotals(items),
+    topMerchants: merchantTotals(items, 3),
     filtered:
       terms.length > 0 ||
       qMin !== undefined ||
@@ -198,19 +196,4 @@ function monthTotals(items: Charge[], from: ISODate | undefined, to: ISODate): M
     }
   }
   return months.slice(-12);
-}
-
-/** Groups by merchant (similar descriptions together) and keeps the top 3. */
-function merchantTotals(items: Charge[]): MerchantTotal[] {
-  const groups = new Map<string, MerchantTotal>();
-  for (const c of items) {
-    // Installments "Celular (2/10)" belong to the same purchase as "Celular".
-    const name = c.description.replace(/\s*\(\d+\/\d+\)$/, '');
-    const key = merchantKey(name) || normalize(name);
-    const g = groups.get(key) ?? { name, total: 0, count: 0 };
-    g.total += c.amount;
-    g.count += 1;
-    groups.set(key, g);
-  }
-  return [...groups.values()].sort((a, b) => b.total - a.total).slice(0, 3);
 }
