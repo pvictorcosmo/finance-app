@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TextInput,
   View,
+  type RefreshControlProps,
   type StyleProp,
   type TextInputProps,
   type ViewStyle,
@@ -43,12 +44,18 @@ function fabBottom(safeBottom: number): number {
 /**
  * "Pull to refresh" spinner in the app colors: syncs pending changes with the cloud
  * and checks for an over-the-air update (see `refreshApp` in hooks/use-pull-to-refresh).
+ *
+ * Forwards every prop (including `style` and `children`) to `RefreshControl`: on Android,
+ * ScrollView renders itself *inside* this element via `cloneElement`, so dropping the
+ * children would leave the screen empty.
+ * @param props Props injected by ScrollView (style, children).
  */
-export function AppRefreshControl() {
+export function AppRefreshControl(props: Omit<RefreshControlProps, 'refreshing' | 'onRefresh'>) {
   const theme = useTheme();
   const { refreshing, onRefresh } = usePullToRefresh();
   return (
     <RefreshControl
+      {...props}
       testID="pull-to-refresh"
       refreshing={refreshing}
       onRefresh={onRefresh}
@@ -66,12 +73,15 @@ export function Screen({
   children,
   fab,
   action,
+  onBack,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   fab?: ReactNode;
   action?: ReactNode;
+  /** Shows a back button before the title (screens opened from a tab, without a header). */
+  onBack?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   return (
@@ -85,6 +95,7 @@ export function Screen({
           { paddingTop: insets.top + Spacing.four, paddingBottom: fabBottom(insets.bottom) + 80 },
         ]}>
         <Row style={styles.screenHeader}>
+          {onBack ? <IconButton icon="chevronLeft" label="Voltar" onPress={onBack} /> : null}
           <View style={styles.flex}>
             <ThemedText type="subtitle">{title}</ThemedText>
             {subtitle ? (
@@ -387,6 +398,102 @@ export function Chips<T extends string>({
         })}
       </View>
     </View>
+  );
+}
+
+/**
+ * Multiple-choice chips (e.g. several categories in a filter).
+ * @param values Selected values.
+ * @param onChange Receives the new selection.
+ */
+export function MultiChips<T extends string>({
+  label,
+  options,
+  values,
+  onChange,
+}: {
+  label?: string;
+  options: ChipOption<T>[];
+  values: T[];
+  onChange: (values: T[]) => void;
+}) {
+  const theme = useTheme();
+  const series = useSeriesColor();
+  return (
+    <View style={styles.field}>
+      {label ? (
+        <ThemedText type="caption" themeColor="textSecondary" style={styles.label}>
+          {label}
+        </ThemedText>
+      ) : null}
+      <View style={styles.chips}>
+        {options.map((opt) => {
+          const selected = values.includes(opt.value);
+          const fg = selected ? theme.onPrimary : theme.text;
+          return (
+            <Pressable
+              key={opt.value}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: selected }}
+              onPress={() => onChange(selected ? values.filter((v) => v !== opt.value) : [...values, opt.value])}
+              style={({ pressed }) => [
+                styles.chip,
+                {
+                  backgroundColor: selected ? theme.primary : theme.backgroundElement,
+                  borderColor: selected ? theme.primary : theme.border,
+                },
+                pressed && styles.pressed,
+              ]}>
+              {opt.icon ? (
+                <Icon name={opt.icon} size={16} color={selected ? fg : opt.color ? series(opt.color) : theme.textSecondary} />
+              ) : opt.color ? (
+                <View style={[styles.chipDot, { backgroundColor: series(opt.color), borderColor: 'transparent' }]} />
+              ) : null}
+              <ThemedText type={selected ? 'smallBold' : 'small'} style={{ color: fg }}>
+                {opt.label}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Search box with a magnifier and a clear button.
+ * @param value Current text.
+ * @param onChangeText Receives the new text ('' when cleared).
+ */
+export function SearchField({
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+}) {
+  const theme = useTheme();
+  return (
+    <Row style={[styles.search, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      <Icon name="search" size={20} color={theme.textSecondary} />
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.textSecondary}
+        returnKeyType="search"
+        autoCorrect={false}
+        accessibilityLabel={placeholder}
+        style={[styles.searchInput, { color: theme.text }]}
+      />
+      {value ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Limpar busca" hitSlop={10} onPress={() => onChangeText('')}>
+          <Icon name="close" size={18} color={theme.textSecondary} />
+        </Pressable>
+      ) : null}
+    </Row>
   );
 }
 
@@ -718,6 +825,8 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  search: { minHeight: 50, borderRadius: 25, borderWidth: 1, paddingHorizontal: Spacing.three, gap: Spacing.two },
+  searchInput: { flex: 1, fontSize: 16, paddingVertical: 0 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',

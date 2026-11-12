@@ -66,7 +66,7 @@ export function ColumnChart({
   const hasTarget = data.some((d) => d.target !== undefined);
 
   return (
-    <View style={styles.wrap} accessibilityRole="image" accessibilityLabel={`Gráfico de ${valueLabel.toLowerCase()} por ciclo`}>
+    <View style={styles.wrap} accessibilityRole="image" accessibilityLabel={`Gráfico: ${valueLabel}`}>
       <Row style={styles.legend}>
         <Row style={styles.legendItem}>
           <View style={[styles.swatch, { backgroundColor: fill }]} />

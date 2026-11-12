@@ -99,6 +99,7 @@ export default function ReceivablesScreen() {
   return (
     <Screen
       title="Devedores"
+      onBack={() => router.back()}
       subtitle="Quem te deve, o que você deve e quando"
       action={<Button label="Acordo" icon="repeat" variant="secondary" compact onPress={() => router.push('/agreement')} />}
       fab={<Fab label="Devedor" onPress={() => router.push('/receivable')} />}>

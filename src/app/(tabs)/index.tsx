@@ -1,48 +1,80 @@
-import { router } from 'expo-router';
-import { Fragment, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { Fragment, useCallback, useMemo } from 'react';
+import { Pressable, ScrollView, StyleSheet, useColorScheme, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HeroCard, HeroText } from '@/components/hero-card';
-import { categoryIcon } from '@/components/icon';
+import { categoryIcon, Icon, type IconName } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
 import {
+  AppRefreshControl,
   Button,
   Card,
   Checkbox,
   Divider,
   EmptyState,
   Fab,
-  IconButton,
   ListItem,
   ProgressBar,
   Row,
-  Screen,
   SectionHeader,
   StatTile,
 } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { FEATURES } from '@/constants/features';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { computeBudget, type CategoryStatus } from '@/domain/budget';
-import { dueDateInCycle, isInCycle } from '@/domain/cycle';
+import { dueDateInCycle } from '@/domain/cycle';
 import { formatShort, relativeDays } from '@/domain/dates';
 import { cycleHistory, savingsTotal } from '@/domain/history';
-import { formatBRL } from '@/domain/money';
+import { upcomingInvoices } from '@/domain/invoice';
+import { invoiceCharges } from '@/domain/invoice-charges';
 import { paymentLabel } from '@/domain/payment';
-import { allAgreementOccurrences, isOpen } from '@/domain/agreements';
-import { allReceivableInstallments } from '@/domain/receivables';
 import { useCycleNavigator } from '@/hooks/use-cycle';
 import { useTheme } from '@/hooks/use-theme';
 import { useFinance, useFinanceData } from '@/store/finance-store';
+import { useMoney, useUiStore } from '@/store/ui-store';
+import { useSyncStore } from '@/sync/sync-store';
 
-export default function SummaryScreen() {
+interface Shortcut {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+}
+
+/** "pvictorcosmo@gmail.com" -> "Pvictorcosmo" (greeting when signed in). */
+function nameFromEmail(email: string | null): string | null {
+  const local = email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
+  return local ? local.charAt(0).toUpperCase() + local.slice(1) : null;
+}
+
+/**
+ * Home: purple header with the money left this cycle (can be hidden), round
+ * shortcuts, card bills, category pace, savings, fixed bills and recent purchases.
+ */
+export default function HomeScreen() {
   const theme = useTheme();
+  const scheme = useColorScheme();
+  const insets = useSafeAreaInsets();
   const data = useFinanceData();
   const toggleFixedPaid = useFinance((s) => s.toggleFixedPaid);
+  const { money, hidden } = useMoney();
+  const toggleHideValues = useUiStore((s) => s.toggleHideValues);
+  const email = useSyncStore((s) => s.email);
   const { cycle, offset, setOffset, today, isCurrent } = useCycleNavigator();
+
+  // White status bar text over the purple header while this tab is focused.
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle('light');
+      return () => setStatusBarStyle(scheme === 'dark' ? 'light' : 'dark');
+    }, [scheme]),
+  );
 
   const budget = useMemo(() => computeBudget(data, cycle, today), [data, cycle, today]);
   const savings = useMemo(() => savingsTotal(cycleHistory(data, today)), [data, today]);
   const recent = useMemo(
-    // Só o que já aconteceu: parcelas e gastos agendados para o futuro ficam no calendário.
+    // Only what already happened; future installments live in the statement/calendar.
     () =>
       budget.charges
         .filter((c) => c.date <= today)
@@ -57,224 +89,313 @@ export default function SummaryScreen() {
         .sort((a, b) => a.due.localeCompare(b.due)),
     [data.fixedBills, cycle],
   );
-  const toReceive = useMemo(() => {
-    // Empréstimos + meses de acordo em que a pessoa te deve (saldo positivo).
-    const pending = [
-      ...allReceivableInstallments(data.receivables, today)
-        .filter((i) => i.status !== 'received')
-        .map((i) => ({ date: i.due, amount: i.amount, overdue: i.status === 'overdue' })),
-      ...allAgreementOccurrences(data.agreements, cycle.end, today)
-        .filter((o) => isOpen(o) && o.net > 0)
-        .map((o) => ({ date: o.date, amount: o.net, overdue: o.status === 'overdue' })),
-    ];
-    return {
-      inCycle: pending.filter((p) => isInCycle(p.date, cycle)).reduce((s, p) => s + p.amount, 0),
-      overdue: pending.filter((p) => p.overdue).reduce((s, p) => s + p.amount, 0),
-    };
-  }, [data.receivables, data.agreements, today, cycle]);
+  const cardBills = useMemo(() => {
+    const charges = invoiceCharges(data, today);
+    return data.cards
+      .map((card) => ({
+        card,
+        invoice: upcomingInvoices(card, charges, data.fixedBills, today, data.invoicePaid[card.id]).find(
+          (i) => !i.paid && i.status !== 'future',
+        ),
+      }))
+      .filter((x) => x.invoice);
+  }, [data, today]);
   const paid = data.fixedPaid[cycle.start] ?? [];
 
-  if (data.settings.salary === 0) {
-    return (
-      <Screen title="Resumo" subtitle="Vamos montar seu mês">
-        <EmptyState
-          icon="savings"
-          text="Comece informando seu salário, suas contas fixas e quanto quer gastar em cada categoria."
-          action={<Button label="Configurar meu mês" icon="chevronRight" onPress={() => router.navigate('/plan')} />}
-        />
-      </Screen>
-    );
-  }
+  const shortcuts: Shortcut[] = [
+    { icon: 'add', label: 'Lançar gasto', onPress: () => router.push('/expense') },
+    { icon: 'sparkles', label: 'Assistente', onPress: () => router.push('/assistant') },
+    { icon: 'search', label: 'Buscar', onPress: () => router.navigate('/extrato') },
+    { icon: 'download', label: 'Importar', onPress: () => router.push('/import') },
+    { icon: 'calendar', label: 'Calendário', onPress: () => router.push('/calendar') },
+    { icon: 'chart', label: 'Histórico', onPress: () => router.push('/history') },
+    ...(FEATURES.receivables
+      ? [{ icon: 'person' as IconName, label: 'Devedores', onPress: () => router.push('/receivables') }]
+      : []),
+  ];
 
+  const name = nameFromEmail(email);
   const over = budget.leftover < 0;
   const cycleLabel = `${formatShort(cycle.start)} – ${formatShort(cycle.end)}`;
+  const heroText = { color: '#FFFFFF' };
+  const heroMuted = { color: theme.onHeroMuted };
 
   return (
-    <Screen
-      title="Resumo"
-      subtitle={isCurrent ? `Ciclo ${cycleLabel}` : `${offset < 0 ? 'Ciclo encerrado' : 'Ciclo futuro'} · ${cycleLabel}`}
-      action={
-        <Row>
-          <IconButton icon="sparkles" label="Assistente: lançar gasto por texto" onPress={() => router.push('/assistant')} />
-          <IconButton icon="chevronLeft" label="Ciclo anterior" onPress={() => setOffset(offset - 1)} />
-          <IconButton icon="chevronRight" label="Próximo ciclo" onPress={() => setOffset(offset + 1)} />
-        </Row>
-      }
-      fab={<Fab label="Gasto" onPress={() => router.push('/expense')} />}>
-      {!isCurrent ? (
-        <Button label="Voltar para o ciclo atual" variant="secondary" compact onPress={() => setOffset(0)} />
-      ) : null}
-
-      <HeroCard>
-        <HeroText type="caption" dim>
-          {over ? 'PASSOU DO LIVRE EM' : isCurrent ? 'DISPONÍVEL NO CICLO' : 'SOBROU NO CICLO'}
-        </HeroText>
-        <HeroText type="title">{formatBRL(Math.abs(budget.leftover))}</HeroText>
-        <HeroText dim>
-          de {formatBRL(budget.free)} livres
-          {isCurrent ? ` · faltam ${budget.daysLeft} ${budget.daysLeft === 1 ? 'dia' : 'dias'}` : ''}
-        </HeroText>
-        <View style={styles.heroBar}>
-          <ProgressBar
-            value={budget.spent}
-            max={budget.free}
-            color={over ? '#FFD1D1' : '#FFFFFF'}
-            trackColor="rgba(255,255,255,0.22)"
-            marker={isCurrent ? budget.progress : undefined}
-          />
-        </View>
-        <Row style={styles.heroStats}>
-          <HeroStat label="Renda" value={formatBRL(budget.salary + budget.extraIncome)} />
-          <HeroStat label="Fixas" value={formatBRL(budget.fixed)} />
-          <HeroStat label="Gasto" value={formatBRL(budget.spent)} />
-        </Row>
-      </HeroCard>
-
-      {budget.unallocated < 0 ? (
-        <ThemedText type="caption" style={{ color: theme.warning }}>
-          ! Os limites das categorias somam {formatBRL(-budget.unallocated)} a mais do que o livre.
-        </ThemedText>
-      ) : null}
-
-      <Row style={styles.tiles}>
-        <StatTile
-          icon="savings"
-          label="Poupança"
-          value={formatBRL(savings)}
-          tone={savings < 0 ? 'danger' : 'accent'}
-          hint={
-            isCurrent && budget.leftover > 0
-              ? `+ até ${formatBRL(budget.leftover + budget.directSavings)} neste ciclo`
-              : 'Ver histórico'
-          }
-          onPress={() => router.push('/history')}
-        />
-        <StatTile
-          icon="person"
-          label="A receber"
-          value={formatBRL(toReceive.inCycle)}
-          tone={toReceive.overdue > 0 ? 'danger' : 'success'}
-          hint={toReceive.overdue > 0 ? `! ${formatBRL(toReceive.overdue)} atrasado` : 'neste ciclo'}
-          onPress={() => router.navigate('/receivables')}
-        />
-      </Row>
-
-      <SectionHeader
-        title="Categorias"
-        action={<Button label="Gráficos" icon="chart" variant="ghost" compact onPress={() => router.push('/history')} />}
-      />
-      <Card>
-        {budget.categories.map((status, i) => (
-          <Fragment key={status.category.id}>
-            {i > 0 ? <Divider /> : null}
-            <CategoryRow status={status} showPace={isCurrent} />
-          </Fragment>
-        ))}
-        {budget.uncategorized > 0 ? (
-          <ThemedText type="caption" themeColor="textSecondary">
-            {formatBRL(budget.uncategorized)} em gastos sem categoria.
-          </ThemedText>
-        ) : null}
-      </Card>
-
-      {bills.length > 0 ? (
-        <>
-          <SectionHeader title="Contas fixas" />
-          <Card>
-            {bills.map(({ bill, due }, i) => {
-              const onCard = bill.payment.kind === 'credit';
-              const isPaid = paid.includes(bill.id);
-              const overdue = !isPaid && !onCard && due < today;
-              return (
-                <Fragment key={bill.id}>
-                  {i > 0 ? <Divider /> : null}
-                  <ListItem
-                    icon="bill"
-                    color={isPaid ? theme.success : overdue ? theme.danger : theme.warning}
-                    title={bill.name}
-                    subtitle={
-                      onCard
-                        ? `${formatShort(due)} · na fatura do ${paymentLabel(bill.payment, data.cards)}`
-                        : `${isPaid ? '✓ Paga' : overdue ? '! Venceu' : 'Vence'} ${formatShort(due)}${
-                            isPaid ? '' : ` · ${relativeDays(due, today)}`
-                          }`
-                    }
-                    right={
-                      <Row>
-                        <ThemedText type="smallBold" style={overdue ? { color: theme.danger } : undefined}>
-                          {formatBRL(bill.amount)}
-                        </ThemedText>
-                        {!onCard ? (
-                          <Checkbox
-                            checked={isPaid}
-                            label={`Marcar ${bill.name} como paga`}
-                            onPress={() => toggleFixedPaid(cycle.start, bill.id)}
-                          />
-                        ) : null}
-                      </Row>
-                    }
-                  />
-                </Fragment>
-              );
-            })}
-          </Card>
-        </>
-      ) : null}
-
-      <SectionHeader
-        title="Últimos gastos"
-        action={
-          <Button label="Calendário" icon="calendar" variant="ghost" compact onPress={() => router.navigate('/calendar')} />
-        }
-      />
-      {recent.length === 0 ? (
-        <EmptyState icon="cart" text="Nenhum gasto neste ciclo ainda. Toque em + Gasto para lançar o primeiro." />
-      ) : (
-        <Card>
-          {recent.map((c, i) => {
-            const cat = data.categories.find((x) => x.id === c.categoryId);
-            return (
-              <Fragment key={c.id}>
-                {i > 0 ? <Divider /> : null}
-                <ListItem
-                  icon={cat ? categoryIcon(cat) : 'tag'}
-                  color={cat?.color ?? theme.textSecondary}
-                  title={c.description}
-                  subtitle={`${formatShort(c.date)} · ${paymentLabel(c.payment, data.cards)}`}
-                  right={
-                    <Row>
-                      <ThemedText type="smallBold">{formatBRL(c.amount)}</ThemedText>
-                      <IconButton
-                        icon="repeat"
-                        label={`Repetir ${c.description}`}
-                        onPress={() => router.push({ pathname: '/expense', params: { repeat: c.expenseId } })}
-                      />
-                    </Row>
-                  }
-                  onPress={() => router.push({ pathname: '/expense', params: { id: c.expenseId } })}
+    <ThemedView style={styles.flex}>
+      <ScrollView
+        refreshControl={<AppRefreshControl />}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 140 }}
+        keyboardShouldPersistTaps="handled">
+        {/* Header */}
+        <View style={[styles.hero, { backgroundColor: theme.heroSurface, paddingTop: insets.top + Spacing.three }]}>
+          <View style={styles.inner}>
+            <Row style={styles.between}>
+              <View style={styles.avatar}>
+                <ThemedText type="smallBold" style={heroText}>
+                  {(name ?? 'F').charAt(0)}
+                </ThemedText>
+              </View>
+              <Row>
+                <HeaderButton
+                  icon={hidden ? 'eyeOff' : 'eye'}
+                  label={hidden ? 'Mostrar valores' : 'Ocultar valores'}
+                  onPress={toggleHideValues}
                 />
-              </Fragment>
-            );
-          })}
-        </Card>
-      )}
-    </Screen>
+                <HeaderButton icon="settings" label="Planejar e ajustes" onPress={() => router.navigate('/plan')} />
+              </Row>
+            </Row>
+            <ThemedText type="heading" style={[heroText, styles.greeting]}>
+              {name ? `Olá, ${name}` : 'Olá!'}
+            </ThemedText>
+
+            {data.settings.salary > 0 ? (
+              <>
+                <Row style={styles.cycleRow}>
+                  <HeaderButton icon="chevronLeft" label="Ciclo anterior" small onPress={() => setOffset(offset - 1)} />
+                  <Pressable onPress={() => setOffset(0)} accessibilityRole="button" accessibilityLabel="Voltar ao ciclo atual">
+                    <ThemedText type="caption" style={heroMuted}>
+                      {isCurrent ? `Ciclo ${cycleLabel}` : `${offset < 0 ? 'Encerrado' : 'Futuro'} · ${cycleLabel}`}
+                    </ThemedText>
+                  </Pressable>
+                  <HeaderButton icon="chevronRight" label="Próximo ciclo" small onPress={() => setOffset(offset + 1)} />
+                </Row>
+                <ThemedText type="caption" style={heroMuted}>
+                  {over ? 'Passou do livre em' : isCurrent ? 'Disponível no mês' : 'Sobrou no ciclo'}
+                </ThemedText>
+                <ThemedText type="title" style={heroText} accessibilityLabel={hidden ? 'Valor oculto' : undefined}>
+                  {money(Math.abs(budget.leftover))}
+                </ThemedText>
+                <ThemedText type="small" style={heroMuted}>
+                  de {money(budget.free)} livres
+                  {isCurrent ? ` · faltam ${budget.daysLeft} ${budget.daysLeft === 1 ? 'dia' : 'dias'}` : ''}
+                </ThemedText>
+                <View style={styles.heroBar}>
+                  <ProgressBar
+                    value={budget.spent}
+                    max={budget.free}
+                    color={over ? '#FFD1D1' : '#FFFFFF'}
+                    trackColor="rgba(255,255,255,0.22)"
+                    marker={isCurrent ? budget.progress : undefined}
+                  />
+                </View>
+              </>
+            ) : (
+              <ThemedText type="small" style={heroMuted}>
+                Comece informando seu salário em Planejar.
+              </ThemedText>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.inner}>
+          {/* Shortcuts */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>
+            {shortcuts.map((s) => (
+              <Pressable
+                key={s.label}
+                accessibilityRole="button"
+                accessibilityLabel={s.label}
+                onPress={s.onPress}
+                style={({ pressed }) => [styles.shortcut, pressed && styles.pressed]}>
+                <View style={[styles.shortcutCircle, { backgroundColor: theme.backgroundSelected }]}>
+                  <Icon name={s.icon} size={24} color={theme.text} />
+                </View>
+                <ThemedText type="caption" style={styles.center} numberOfLines={2}>
+                  {s.label}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          <View style={styles.sections}>
+            {data.settings.salary === 0 ? (
+              <EmptyState
+                icon="savings"
+                text="Comece informando seu salário, suas contas fixas e quanto quer gastar em cada categoria."
+                action={<Button label="Configurar meu mês" icon="chevronRight" onPress={() => router.navigate('/plan')} />}
+              />
+            ) : null}
+
+            {/* Card bills */}
+            {cardBills.length ? (
+              <Card>
+                {cardBills.map(({ card, invoice }, i) => (
+                  <Fragment key={card.id}>
+                    {i > 0 ? <Divider /> : null}
+                    <ListItem
+                      icon="card"
+                      color={card.color}
+                      title={`Fatura ${card.name}`}
+                      subtitle={
+                        invoice!.overdue
+                          ? `! Atrasada · venceu ${formatShort(invoice!.due)}`
+                          : invoice!.status === 'closed'
+                            ? `Fechada · vence ${formatShort(invoice!.due)} (${relativeDays(invoice!.due, today)})`
+                            : `Aberta · fecha ${formatShort(invoice!.closing)}`
+                      }
+                      subtitleColor={invoice!.overdue ? theme.danger : undefined}
+                      right={money(invoice!.total)}
+                      onPress={() => router.navigate('/cards')}
+                    />
+                  </Fragment>
+                ))}
+              </Card>
+            ) : null}
+
+            {/* Categories */}
+            {budget.categories.length ? (
+              <>
+                <SectionHeader
+                  title="Categorias"
+                  action={<Button label="Histórico" icon="chart" variant="ghost" compact onPress={() => router.push('/history')} />}
+                />
+                <Card>
+                  {budget.categories.map((status, i) => (
+                    <Fragment key={status.category.id}>
+                      {i > 0 ? <Divider /> : null}
+                      <CategoryRow status={status} showPace={isCurrent} />
+                    </Fragment>
+                  ))}
+                  {budget.uncategorized > 0 ? (
+                    <ThemedText type="caption" themeColor="textSecondary">
+                      {money(budget.uncategorized)} em gastos sem categoria.
+                    </ThemedText>
+                  ) : null}
+                </Card>
+              </>
+            ) : null}
+
+            {/* Savings */}
+            <Row style={styles.tiles}>
+              <StatTile
+                icon="savings"
+                label="Poupança"
+                value={money(savings)}
+                tone={savings < 0 ? 'danger' : 'accent'}
+                hint={
+                  isCurrent && budget.leftover > 0
+                    ? `+ até ${money(budget.leftover + budget.directSavings)} neste ciclo`
+                    : 'Ver histórico'
+                }
+                onPress={() => router.push('/history')}
+              />
+            </Row>
+
+            {/* Fixed bills */}
+            {bills.length > 0 ? (
+              <>
+                <SectionHeader title="Contas fixas" />
+                <Card>
+                  {bills.map(({ bill, due }, i) => {
+                    const onCard = bill.payment.kind === 'credit';
+                    const isPaid = paid.includes(bill.id);
+                    const overdue = !isPaid && !onCard && due < today;
+                    return (
+                      <Fragment key={bill.id}>
+                        {i > 0 ? <Divider /> : null}
+                        <ListItem
+                          icon="bill"
+                          color={isPaid ? theme.success : overdue ? theme.danger : theme.warning}
+                          title={bill.name}
+                          subtitle={
+                            onCard
+                              ? `${formatShort(due)} · na fatura do ${paymentLabel(bill.payment, data.cards)}`
+                              : `${isPaid ? '✓ Paga' : overdue ? '! Venceu' : 'Vence'} ${formatShort(due)}${
+                                  isPaid ? '' : ` · ${relativeDays(due, today)}`
+                                }`
+                          }
+                          right={
+                            <Row>
+                              <ThemedText type="smallBold" style={overdue ? { color: theme.danger } : undefined}>
+                                {money(bill.amount)}
+                              </ThemedText>
+                              {!onCard ? (
+                                <Checkbox
+                                  checked={isPaid}
+                                  label={`Marcar ${bill.name} como paga`}
+                                  onPress={() => toggleFixedPaid(cycle.start, bill.id)}
+                                />
+                              ) : null}
+                            </Row>
+                          }
+                        />
+                      </Fragment>
+                    );
+                  })}
+                </Card>
+              </>
+            ) : null}
+
+            {/* Recent purchases */}
+            <SectionHeader
+              title="Últimas compras"
+              action={
+                <Button label="Ver extrato" icon="list" variant="ghost" compact onPress={() => router.navigate('/extrato')} />
+              }
+            />
+            {recent.length === 0 ? (
+              <EmptyState icon="cart" text="Nenhuma compra neste ciclo ainda. Toque em Lançar gasto para começar." />
+            ) : (
+              <Card>
+                {recent.map((c, i) => {
+                  const cat = data.categories.find((x) => x.id === c.categoryId);
+                  return (
+                    <Fragment key={c.id}>
+                      {i > 0 ? <Divider /> : null}
+                      <ListItem
+                        icon={cat ? categoryIcon(cat) : 'tag'}
+                        color={cat?.color ?? theme.textSecondary}
+                        title={c.description}
+                        subtitle={`${formatShort(c.date)} · ${paymentLabel(c.payment, data.cards)}`}
+                        right={money(c.amount)}
+                        onPress={() => router.push({ pathname: '/expense', params: { id: c.expenseId } })}
+                      />
+                    </Fragment>
+                  );
+                })}
+              </Card>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+      <Fab label="Gasto" onPress={() => router.push('/expense')} />
+    </ThemedView>
   );
 }
 
-function HeroStat({ label, value }: { label: string; value: string }) {
+/** Round translucent button on the purple header. */
+function HeaderButton({
+  icon,
+  label,
+  onPress,
+  small,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  small?: boolean;
+}) {
+  const size = small ? 28 : 40;
   return (
-    <View style={styles.heroStat}>
-      <HeroText type="caption" dim>
-        {label}
-      </HeroText>
-      <HeroText type="smallBold">{value}</HeroText>
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.headerButton,
+        { width: size, height: size, borderRadius: size / 2 },
+        pressed && styles.pressed,
+      ]}>
+      <Icon name={icon} size={small ? 16 : 20} color="#FFFFFF" />
+    </Pressable>
   );
 }
 
+/** One category with spending, limit, pace marker and a status line. */
 function CategoryRow({ status, showPace }: { status: CategoryStatus; showPace: boolean }) {
   const theme = useTheme();
+  const { money } = useMoney();
   const { category, spent, limit, expected, remaining, perDayLeft, health } = status;
 
   let message: string;
@@ -282,16 +403,16 @@ function CategoryRow({ status, showPace }: { status: CategoryStatus; showPace: b
   if (health === 'unset') {
     message = 'Sem limite definido';
   } else if (health === 'over') {
-    message = `! Estourou ${formatBRL(-remaining)}`;
+    message = `! Estourou ${money(-remaining)}`;
     color = theme.danger;
   } else if (health === 'attention' && showPace) {
-    message = `! Acima do ritmo · normal seria ${formatBRL(expected)}`;
+    message = `! Acima do ritmo · normal seria ${money(expected)}`;
     color = theme.warning;
   } else if (showPace) {
-    message = `✓ No ritmo · ${formatBRL(perDayLeft)}/dia`;
+    message = `✓ No ritmo · ${money(perDayLeft)}/dia`;
     color = theme.success;
   } else {
-    message = `Sobrou ${formatBRL(remaining)}`;
+    message = `Sobrou ${money(remaining)}`;
   }
 
   return (
@@ -304,13 +425,13 @@ function CategoryRow({ status, showPace }: { status: CategoryStatus; showPace: b
         subtitleColor={color}
         right={
           <View style={styles.catRight}>
-            <ThemedText type="smallBold">{formatBRL(spent)}</ThemedText>
+            <ThemedText type="smallBold">{money(spent)}</ThemedText>
             <ThemedText type="caption" themeColor="textSecondary">
-              de {formatBRL(limit)}
+              de {money(limit)}
             </ThemedText>
           </View>
         }
-        onPress={() => router.push({ pathname: '/category', params: { id: category.id } })}
+        onPress={() => router.navigate({ pathname: '/extrato' })}
       />
       <View style={styles.catBar}>
         <ProgressBar
@@ -326,9 +447,28 @@ function CategoryRow({ status, showPace }: { status: CategoryStatus; showPace: b
 }
 
 const styles = StyleSheet.create({
-  heroBar: { marginTop: Spacing.two },
-  heroStats: { marginTop: Spacing.two, justifyContent: 'space-between' },
-  heroStat: { gap: 2 },
+  flex: { flex: 1 },
+  between: { justifyContent: 'space-between' },
+  center: { textAlign: 'center' },
+  pressed: { opacity: 0.7 },
+  inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', paddingHorizontal: Spacing.three },
+  hero: { paddingBottom: Spacing.four, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, gap: Spacing.one },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  greeting: { marginTop: Spacing.three, marginBottom: Spacing.two },
+  cycleRow: { gap: Spacing.one, marginBottom: Spacing.one },
+  heroBar: { marginTop: Spacing.three },
+  headerButton: { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.16)' },
+  shortcuts: { gap: Spacing.three, paddingVertical: Spacing.three },
+  shortcut: { width: 72, alignItems: 'center', gap: 6 },
+  shortcutCircle: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
+  sections: { gap: Spacing.three },
   tiles: { alignItems: 'stretch', gap: Spacing.three },
   catRow: { paddingBottom: Spacing.two },
   catRight: { alignItems: 'flex-end' },

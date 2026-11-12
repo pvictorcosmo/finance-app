@@ -73,7 +73,14 @@ function toReceiveToday(data: FinanceData, date: ISODate): string[] {
  * Texto da notificação diária para o dia `date`, com os dados atuais.
  * (Para dias futuros, assume que nada novo foi gasto até lá; o app reagenda quando você lança algo.)
  */
-export function buildDailySummary(data: FinanceData, date: ISODate): DailySummary {
+/**
+ * @param options `includePeople: false` leaves out debtors and agreements (feature hidden).
+ */
+export function buildDailySummary(
+  data: FinanceData,
+  date: ISODate,
+  options: { includePeople?: boolean } = {},
+): DailySummary {
   const cycle = cycleFor(date, data.settings.cycleStartDay);
   const budget = computeBudget(data, cycle, date, allCharges(data.expenses, data.cards));
   const days = budget.daysLeft;
@@ -90,7 +97,7 @@ export function buildDailySummary(data: FinanceData, date: ISODate): DailySummar
 
   const due = dueToday(data, date);
   if (due.length) lines.push(`📅 Vence hoje: ${due.join(', ')}`);
-  const receive = toReceiveToday(data, date);
+  const receive = options.includePeople === false ? [] : toReceiveToday(data, date);
   if (receive.length) lines.push(`🤝 Acertos hoje: ${receive.join(', ')}`);
 
   // Amanhã também ajuda a se programar (só contas e faturas).

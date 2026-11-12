@@ -13,16 +13,13 @@ export default function AppTabs() {
       <TabList asChild>
         <CustomTabList>
           <TabTrigger name="index" href="/" asChild>
-            <TabButton>Resumo</TabButton>
+            <TabButton>Início</TabButton>
           </TabTrigger>
-          <TabTrigger name="calendar" href="/calendar" asChild>
-            <TabButton>Calendário</TabButton>
+          <TabTrigger name="extrato" href="/extrato" asChild>
+            <TabButton>Extrato</TabButton>
           </TabTrigger>
           <TabTrigger name="cards" href="/cards" asChild>
             <TabButton>Cartões</TabButton>
-          </TabTrigger>
-          <TabTrigger name="receivables" href="/receivables" asChild>
-            <TabButton>Devedores</TabButton>
           </TabTrigger>
           <TabTrigger name="plan" href="/plan" asChild>
             <TabButton>Planejar</TabButton>
