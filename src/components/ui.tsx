@@ -10,17 +10,21 @@ import {
   type RefreshControlProps,
   type StyleProp,
   type TextInputProps,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, IconBadge, type IconName } from '@/components/icon';
+import { AnimatedFill, PressableScale } from '@/components/motion';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { interFor } from '@/constants/fonts';
 import { useSeriesColor } from '@/constants/series-colors';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
 import { useTheme } from '@/hooks/use-theme';
+import { haptic } from '@/ui/haptics';
 
 /** Web tab bar height (expo-router/ui), drawn over the content. */
 const WEB_TAB_BAR = 76;
@@ -113,17 +117,30 @@ export function Screen({
   );
 }
 
-/** Form screen (opened as a modal with the Stack header), with pull to refresh. */
-export function FormScreen({ children }: { children: ReactNode }) {
+/**
+ * Form screen (opened as a sheet with the Stack header), with pull to refresh.
+ * @param footer Pinned below the scroll (e.g. the Save button), always within reach.
+ */
+export function FormScreen({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   return (
     <ThemedView style={styles.flex}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
         refreshControl={<AppRefreshControl />}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.five }]}>
+        contentContainerStyle={[styles.content, { paddingBottom: footer ? Spacing.four : insets.bottom + Spacing.five }]}>
         {children}
       </ScrollView>
+      {footer ? (
+        <View
+          style={[
+            styles.footer,
+            { paddingBottom: insets.bottom + Spacing.two, backgroundColor: theme.background, borderTopColor: theme.border },
+          ]}>
+          <View style={styles.footerInner}>{footer}</View>
+        </View>
+      ) : null}
     </ThemedView>
   );
 }
@@ -191,21 +208,18 @@ export function Button({
     ghost: theme.accent,
   }[variant];
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       onPress={onPress}
       disabled={disabled}
-      style={({ pressed }) => [
-        styles.button,
-        compact && styles.buttonCompact,
-        { backgroundColor: bg, opacity: disabled ? 0.4 : pressed ? 0.75 : 1 },
-        pressed && styles.pressedScale,
-      ]}>
+      feedback={variant === 'ghost' ? 'selection' : 'tap'}
+      style={[styles.button, compact && styles.buttonCompact, { backgroundColor: bg, opacity: disabled ? 0.4 : 1 }]}>
       {icon ? <Icon name={icon} size={compact ? 16 : 18} color={fg} /> : null}
       <ThemedText type="smallBold" style={{ color: fg, fontSize: compact ? 14 : 16 }}>
         {label}
       </ThemedText>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -221,14 +235,16 @@ export function IconButton({
 }) {
   const theme = useTheme();
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={8}
       onPress={onPress}
-      style={({ pressed }) => [styles.iconButton, { backgroundColor: theme.backgroundSelected }, pressed && styles.pressed]}>
+      scaleTo={0.9}
+      feedback="selection"
+      style={[styles.iconButton, { backgroundColor: theme.backgroundSelected }]}>
       <Icon name={icon} size={18} color={theme.text} />
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -237,26 +253,23 @@ export function Fab({ label, onPress }: { label: string; onPress: () => void }) 
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.fab,
-        {
-          backgroundColor: theme.primary,
-          shadowColor: theme.primary,
-          bottom: fabBottom(insets.bottom),
-        },
-        pressed && styles.pressedScale,
-      ]}>
+      scaleTo={0.94}
+      feedback="tap"
+      style={[styles.fab, { backgroundColor: theme.primary, shadowColor: theme.primary, bottom: fabBottom(insets.bottom) }]}>
       <Icon name="add" size={22} color={theme.onPrimary} />
       <ThemedText type="smallBold" style={{ color: theme.onPrimary, fontSize: 16 }}>
         {label}
       </ThemedText>
-    </Pressable>
+    </PressableScale>
   );
 }
+
+/** Inter for text inputs (they do not go through ThemedText). */
+const inputFont = (weight: TextStyle['fontWeight'] = 500) => interFor(weight) ?? { fontWeight: weight };
 
 export function Field({ label, hint, ...input }: TextInputProps & { label: string; hint?: string }) {
   const theme = useTheme();
@@ -279,6 +292,7 @@ export function Field({ label, hint, ...input }: TextInputProps & { label: strin
         }}
         style={[
           styles.input,
+          inputFont(),
           {
             color: theme.text,
             backgroundColor: theme.backgroundElement,
@@ -327,7 +341,7 @@ export function AmountInput({
           autoFocus={autoFocus}
           accessibilityLabel={label}
           // Largura acompanha o texto, para "R$ 123,45" ficar centralizado como um bloco.
-          style={[styles.amountInput, { color: theme.text, width: Math.max(4, (value || '0,00').length) * 29 + 8 }]}
+          style={[styles.amountInput, inputFont(800), { color: theme.text, width: Math.max(4, (value || '0,00').length) * 29 + 8 }]}
         />
       </Row>
     </View>
@@ -371,7 +385,10 @@ export function Chips<T extends string>({
               key={opt.value}
               accessibilityRole="button"
               accessibilityState={{ selected }}
-              onPress={() => onChange(opt.value)}
+              onPress={() => {
+                if (opt.value !== value) haptic.selection();
+                onChange(opt.value);
+              }}
               style={({ pressed }) => [
                 styles.chip,
                 {
@@ -435,7 +452,10 @@ export function MultiChips<T extends string>({
               key={opt.value}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: selected }}
-              onPress={() => onChange(selected ? values.filter((v) => v !== opt.value) : [...values, opt.value])}
+              onPress={() => {
+                haptic.selection();
+                onChange(selected ? values.filter((v) => v !== opt.value) : [...values, opt.value]);
+              }}
               style={({ pressed }) => [
                 styles.chip,
                 {
@@ -486,7 +506,7 @@ export function SearchField({
         returnKeyType="search"
         autoCorrect={false}
         accessibilityLabel={placeholder}
-        style={[styles.searchInput, { color: theme.text }]}
+        style={[styles.searchInput, inputFont(), { color: theme.text }]}
       />
       {value ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Limpar busca" hitSlop={10} onPress={() => onChangeText('')}>
@@ -517,7 +537,10 @@ export function DayStepper({
 }) {
   const theme = useTheme();
   const size = max - min + 1;
-  const step = (n: number) => onChange(((value - min + n + size) % size) + min);
+  const step = (n: number) => {
+    haptic.selection();
+    onChange(((value - min + n + size) % size) + min);
+  };
   return (
     <View style={styles.field}>
       <ThemedText type="caption" themeColor="textSecondary" style={styles.label}>
@@ -558,7 +581,11 @@ export function Checkbox({ checked, onPress, label }: { checked: boolean; onPres
       accessibilityState={{ checked }}
       accessibilityLabel={label}
       hitSlop={10}
-      onPress={onPress}
+      onPress={() => {
+        if (checked) haptic.selection();
+        else haptic.success();
+        onPress();
+      }}
       style={[
         styles.check,
         { borderColor: checked ? theme.success : theme.border },
@@ -618,11 +645,10 @@ export function ProgressBar({
   trackColor?: string;
 }) {
   const theme = useTheme();
-  const series = useSeriesColor();
   const ratio = max > 0 ? Math.min(1, value / max) : value > 0 ? 1 : 0;
   return (
     <View style={[styles.track, { height, borderRadius: height / 2, backgroundColor: trackColor ?? theme.backgroundSelected }]}>
-      <View style={[styles.fill, { width: `${ratio * 100}%`, borderRadius: height / 2, backgroundColor: series(color) }]} />
+      <AnimatedFill ratio={ratio} color={color} height={height} />
       {marker !== undefined && marker > 0 && marker < 1 ? (
         <View style={[styles.marker, { left: `${marker * 100}%`, backgroundColor: theme.text }]} />
       ) : null}
@@ -673,7 +699,7 @@ export function StatTile({
   const theme = useTheme();
   const { fg, bg } = toneColors(theme, tone);
   return (
-    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [styles.flex, pressed && styles.pressed]}>
+    <PressableScale onPress={onPress} disabled={!onPress} feedback="selection" style={styles.flex}>
       <Card style={styles.tile}>
         <View style={[styles.tileIcon, { backgroundColor: bg }]}>
           <Icon name={icon} size={18} color={fg} />
@@ -690,18 +716,39 @@ export function StatTile({
           </ThemedText>
         ) : null}
       </Card>
-    </Pressable>
+    </PressableScale>
   );
 }
 
-export function EmptyState({ text, action, icon = 'tag' }: { text: string; action?: ReactNode; icon?: IconName }) {
+/**
+ * Friendly empty state: a small "illustration" (icon inside a soft ring), an optional
+ * title, a sentence and an optional action.
+ */
+export function EmptyState({
+  text,
+  title,
+  action,
+  icon = 'tag',
+}: {
+  text: string;
+  title?: string;
+  action?: ReactNode;
+  icon?: IconName;
+}) {
   const theme = useTheme();
   return (
     <Card style={styles.empty}>
-      <View style={[styles.emptyIcon, { backgroundColor: theme.primarySoft }]}>
-        <Icon name={icon} size={26} color={theme.accent} />
+      <View style={[styles.emptyRing, { borderColor: theme.primarySoft }]}>
+        <View style={[styles.emptyIcon, { backgroundColor: theme.primarySoft }]}>
+          <Icon name={icon} size={28} color={theme.accent} />
+        </View>
       </View>
-      <ThemedText themeColor="textSecondary" style={styles.center}>
+      {title ? (
+        <ThemedText type="heading" style={styles.center}>
+          {title}
+        </ThemedText>
+      ) : null}
+      <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
         {text}
       </ThemedText>
       {action}
@@ -768,6 +815,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   screenHeader: { alignItems: 'flex-end', marginBottom: Spacing.one },
+  footer: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.two, paddingHorizontal: Spacing.three },
+  footerInner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.two },
   card: { borderRadius: 22, padding: Spacing.three, gap: Spacing.two },
   shadow: Platform.select({
     ios: { shadowColor: '#0E0F13', shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } },
@@ -848,16 +897,15 @@ const styles = StyleSheet.create({
   check: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, alignSelf: 'flex-start' },
   track: { overflow: 'hidden' },
-  fill: { height: '100%' },
   marker: { position: 'absolute', top: -2, bottom: -2, width: 2, opacity: 0.5 },
   kv: { justifyContent: 'space-between' },
   tile: { flex: 1, gap: 4 },
   tileIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  empty: { alignItems: 'center', gap: Spacing.three, paddingVertical: Spacing.five },
-  emptyIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  empty: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.five, paddingHorizontal: Spacing.four },
+  emptyRing: { padding: 8, borderRadius: 50, borderWidth: 6 },
+  emptyIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   center: { textAlign: 'center' },
   listItem: { paddingVertical: 10, gap: Spacing.three },
   dotSlot: { width: 40, alignItems: 'center' },
   pressed: { opacity: 0.6 },
-  pressedScale: { transform: [{ scale: 0.97 }] },
 });

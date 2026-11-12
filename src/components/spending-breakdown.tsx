@@ -1,25 +1,25 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { categoryIcon, Icon, IconBadge, type IconName } from '@/components/icon';
+import { MoneyText } from '@/components/money-text';
+import { AnimatedFill, Appear } from '@/components/motion';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Row } from '@/components/ui';
 import { useSeriesColor } from '@/constants/series-colors';
 import { Spacing } from '@/constants/theme';
 import {
-  categoryBreakdown,
   changeRatio,
   chargesOfSlice,
   topMerchants,
   UNCATEGORIZED,
+  type Breakdown,
   type CategorySlice,
 } from '@/domain/breakdown';
-import { computeBudget } from '@/domain/budget';
-import { budgetDate, type Charge } from '@/domain/charges';
-import { elapsedDays, shiftCycle, type Cycle } from '@/domain/cycle';
-import { addDays } from '@/domain/dates';
-import type { Cents, FinanceData, ID, ISODate } from '@/domain/types';
+import type { Charge } from '@/domain/charges';
+import type { Cents, FinanceData, ID } from '@/domain/types';
+import { haptic } from '@/ui/haptics';
 import { useTheme } from '@/hooks/use-theme';
 import { useMoney } from '@/store/ui-store';
 
@@ -58,42 +58,23 @@ function comparisonText(current: Cents, previous: Cents, sameDay: boolean): stri
  * "Para onde foi seu dinheiro": spending per category as ranked bars; tapping a
  * category shows what was spent most inside it (e.g. Dia a dia → Mercado, Padaria).
  * @param data App data.
- * @param cycle Cycle being shown.
  * @param charges The cycle's charges (as counted by the budget).
- * @param today Reference date.
- * @param isCurrent Whether `cycle` is the running one (compares to the same day of the previous cycle).
+ * @param breakdown {@link categoryBreakdown} of `charges` against the previous cycle.
+ * @param isCurrent Whether the cycle is the running one (the comparison is "até hoje").
  */
 export function SpendingBreakdown({
   data,
-  cycle,
   charges,
-  today,
+  breakdown,
   isCurrent,
 }: {
   data: FinanceData;
-  cycle: Cycle;
   charges: Charge[];
-  today: ISODate;
+  breakdown: Breakdown;
   isCurrent: boolean;
 }) {
   const theme = useTheme();
-  const { money } = useMoney();
   const [selected, setSelected] = useState<ID | null>(null);
-
-  // Previous cycle, cut at the same day while the current one is still running.
-  const previous = useMemo(() => {
-    const prev = shiftCycle(cycle, data.settings.cycleStartDay, -1);
-    const all = computeBudget(data, prev, today).charges;
-    if (!isCurrent) return all;
-    const limit = addDays(prev.start, elapsedDays(cycle, today) - 1);
-    const basis = data.settings.cardBudgetBasis ?? 'due';
-    return all.filter((c) => budgetDate(c, basis) <= limit);
-  }, [data, cycle, today, isCurrent]);
-
-  const breakdown = useMemo(
-    () => categoryBreakdown(charges, previous, data.categories),
-    [charges, previous, data.categories],
-  );
   const slice = breakdown.slices.find((s) => s.id === selected);
 
   if (!breakdown.slices.length) return null;
@@ -130,7 +111,10 @@ export function SpendingBreakdown({
       caption: `${pct(s.share)} · ${s.count} ${s.count === 1 ? 'compra' : 'compras'}`,
       color: colorOf(s),
       icon: s.category ? categoryIcon(s.category) : 'tag',
-      onPress: () => setSelected(s.id),
+      onPress: () => {
+        haptic.selection();
+        setSelected(s.id);
+      },
       accessibilityHint: 'Mostra onde você mais gastou nesta categoria',
     }));
     total = breakdown.total;
@@ -159,7 +143,7 @@ export function SpendingBreakdown({
       </ScrollView>
 
       <View>
-        <ThemedText type="amount">{money(total)}</ThemedText>
+        <MoneyText value={total} />
         {comparison ? (
           <ThemedText type="caption" themeColor="textSecondary">
             {comparison}
@@ -168,10 +152,17 @@ export function SpendingBreakdown({
       </View>
 
       <View style={styles.rows}>
-        {rows.map((r) => (
-          <Bar key={r.key} row={r} max={max} />
+        {/* Keyed by the selection so the rows slide in again when switching category. */}
+        {rows.map((r, i) => (
+          <Appear key={`${slice?.id ?? 'all'}-${r.key}`} index={i}>
+            <Bar row={r} max={max} />
+          </Appear>
         ))}
-        {others ? <Bar row={{ ...others, color: theme.textSecondary }} max={max} /> : null}
+        {others ? (
+          <Appear key={`${slice?.id ?? 'all'}-others`} index={rows.length}>
+            <Bar row={{ ...others, color: theme.textSecondary }} max={max} />
+          </Appear>
+        ) : null}
       </View>
 
       {slice ? (
@@ -209,7 +200,10 @@ function Pill({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      onPress={onPress}
+      onPress={() => {
+        if (!selected) haptic.selection();
+        onPress();
+      }}
       style={[
         styles.pill,
         selected
@@ -227,7 +221,6 @@ function Pill({
 /** A ranked bar row; text stays in text colors, the bar carries the category color. */
 function Bar({ row, max }: { row: BarRow; max: number }) {
   const theme = useTheme();
-  const series = useSeriesColor();
   const { money } = useMoney();
   const ratio = Math.max(0, Math.min(1, row.value / max));
   const content = (
@@ -241,7 +234,7 @@ function Bar({ row, max }: { row: BarRow; max: number }) {
           <ThemedText type="smallBold">{money(row.value)}</ThemedText>
         </Row>
         <View style={[styles.track, { backgroundColor: theme.backgroundSelected }]}>
-          <View style={[styles.fill, { width: `${ratio * 100}%`, backgroundColor: series(row.color) }]} />
+          <AnimatedFill ratio={ratio} color={row.color} height={8} />
         </View>
         <ThemedText type="caption" themeColor="textSecondary">
           {row.caption}
@@ -281,5 +274,4 @@ const styles = StyleSheet.create({
   rows: { gap: Spacing.three },
   barRow: { gap: Spacing.two, alignItems: 'center' },
   track: { height: 8, borderRadius: 4, marginVertical: 4, overflow: 'hidden' },
-  fill: { height: 8, borderRadius: 4 },
 });

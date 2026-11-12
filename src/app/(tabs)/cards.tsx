@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
 import { Fragment, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { HeroCard, HeroText, shade } from '@/components/hero-card';
+import { CreditCardVisual } from '@/components/credit-card-visual';
 import { Icon } from '@/components/icon';
+import { Appear } from '@/components/motion';
 import { ThemedText } from '@/components/themed-text';
 import {
   Badge,
@@ -14,13 +15,11 @@ import {
   EmptyState,
   IconButton,
   ListItem,
-  ProgressBar,
   Row,
   Screen,
   SectionHeader,
 } from '@/components/ui';
-import { useSeriesColor } from '@/constants/series-colors';
-import { Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { invoiceCharges } from '@/domain/invoice-charges';
 import { addDays, formatShort, relativeDays, todayISO } from '@/domain/dates';
 import { upcomingInvoices, type Invoice } from '@/domain/invoice';
@@ -28,7 +27,12 @@ import { useMoney } from '@/store/ui-store';
 import type { CreditCard } from '@/domain/types';
 import { useTheme } from '@/hooks/use-theme';
 import { useFinance, useFinanceData } from '@/store/finance-store';
+import { haptic } from '@/ui/haptics';
 
+/** Space between cards in the carousel. */
+const CARD_GAP = 12;
+
+/** Cards tab: next payments, a swipeable wallet of cards and the bills of the selected one. */
 export default function CardsScreen() {
   const theme = useTheme();
   const { money: formatBRL } = useMoney();
@@ -57,6 +61,13 @@ export default function CardsScreen() {
     [perCard],
   );
 
+  const [index, setIndex] = useState(0);
+  const selected = perCard[Math.min(index, perCard.length - 1)];
+  const { width } = useWindowDimensions();
+  const available = Math.min(width, MaxContentWidth) - Spacing.three * 2;
+  // With several cards the next one peeks in from the right, inviting the swipe.
+  const cardWidth = Math.min(420, perCard.length > 1 ? available * 0.88 : available);
+
   return (
     <Screen
       title="Cartões"
@@ -70,14 +81,15 @@ export default function CardsScreen() {
       {data.cards.length === 0 ? (
         <EmptyState
           icon="card"
-          text="Cadastre seus cartões de crédito com o dia de fechamento e de vencimento para acompanhar as faturas."
+          title="Sua carteira está vazia"
+          text="Cadastre seus cartões com o dia de fechamento e de vencimento para saber quando pagar cada fatura."
           action={<Button label="Adicionar cartão" icon="add" onPress={() => router.push('/card')} />}
         />
       ) : (
         <>
           <SectionHeader title="Próximos pagamentos" />
           {nextPayments.length === 0 ? (
-            <EmptyState icon="check" text="Nenhuma fatura a pagar agora." />
+            <EmptyState icon="check" title="Tudo em dia" text="Nenhuma fatura para pagar agora. Aproveite! 🎉" />
           ) : (
             <Card>
               {nextPayments.map(({ card, invoice }, i) => (
@@ -112,14 +124,49 @@ export default function CardsScreen() {
           )}
 
           <SectionHeader title="Meus cartões" />
-          {perCard.map(({ card, invoices }) => (
-            <CardBlock
-              key={card.id}
-              card={card}
-              invoices={invoices}
-              onTogglePaid={(due) => toggleInvoicePaid(card.id, due)}
+          {/* Swipe between cards like a wallet; the bills of the selected one follow below. */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={cardWidth + CARD_GAP}
+            decelerationRate="fast"
+            disableIntervalMomentum
+            style={styles.carousel}
+            contentContainerStyle={styles.carouselContent}
+            onMomentumScrollEnd={(e) => {
+              const next = Math.round(e.nativeEvent.contentOffset.x / (cardWidth + CARD_GAP));
+              if (next !== index) haptic.selection();
+              setIndex(Math.max(0, Math.min(perCard.length - 1, next)));
+            }}>
+            {perCard.map(({ card, invoices }) => (
+              <CreditCardVisual
+                key={card.id}
+                card={card}
+                open={invoices.find((i) => i.status === 'open')}
+                used={invoices.filter((i) => !i.paid).reduce((s, i) => s + i.total, 0)}
+                width={cardWidth}
+                onEdit={() => router.push({ pathname: '/card', params: { id: card.id } })}
+              />
+            ))}
+          </ScrollView>
+          {perCard.length > 1 ? (
+            <View style={styles.dots} accessible accessibilityLabel={`Cartão ${index + 1} de ${perCard.length}`}>
+              {perCard.map(({ card }, i) => (
+                <View
+                  key={card.id}
+                  style={[styles.dot, { backgroundColor: i === index ? theme.accent : theme.border }, i === index && styles.dotActive]}
+                />
+              ))}
+            </View>
+          ) : null}
+          {selected ? (
+            <InvoiceList
+              key={selected.card.id}
+              card={selected.card}
+              invoices={selected.invoices}
+              onTogglePaid={(due) => toggleInvoicePaid(selected.card.id, due)}
             />
-          ))}
+          ) : null}
         </>
       )}
     </Screen>
@@ -134,7 +181,8 @@ function statusBadge(inv: Invoice) {
   return <Badge tone="neutral" label="Próxima" />;
 }
 
-function CardBlock({
+/** Bills of one card (open, closed, next), each expandable into its purchases. */
+function InvoiceList({
   card,
   invoices,
   onTogglePaid,
@@ -145,65 +193,13 @@ function CardBlock({
 }) {
   const theme = useTheme();
   const { money: formatBRL } = useMoney();
-  const series = useSeriesColor();
   const [expanded, setExpanded] = useState<string | null>(null);
-  // Limite comprometido: tudo que ainda não foi pago (inclui parcelas futuras).
-  const used = invoices.filter((i) => !i.paid).reduce((s, i) => s + i.total, 0);
-  const open = invoices.find((i) => i.status === 'open');
-  const base = series(card.color);
 
   return (
-    <View style={styles.block}>
-      <HeroCard colors={[base, shade(base, 0.45)]}>
-        <Row style={styles.between}>
-          <Row>
-            <Icon name="card" size={22} color="#FFFFFF" />
-            <HeroText type="heading">{card.name}</HeroText>
-          </Row>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Editar ${card.name}`}
-            hitSlop={10}
-            onPress={() => router.push({ pathname: '/card', params: { id: card.id } })}
-            style={styles.editBtn}>
-            <Icon name="edit" size={16} color="#FFFFFF" />
-          </Pressable>
-        </Row>
-        <View style={styles.cardAmount}>
-          <HeroText type="caption" dim>
-            FATURA ABERTA
-          </HeroText>
-          <HeroText type="title">{formatBRL(open?.total ?? 0)}</HeroText>
-          {open ? (
-            <HeroText dim>
-              fecha {formatShort(open.closing)} · vence {formatShort(open.due)}
-            </HeroText>
-          ) : null}
-        </View>
-        {card.limit ? (
-          <View style={styles.cardLimit}>
-            <ProgressBar
-              value={used}
-              max={card.limit}
-              color={used > card.limit ? '#FFD1D1' : '#FFFFFF'}
-              trackColor="rgba(255,255,255,0.22)"
-              height={6}
-            />
-            <Row style={styles.between}>
-              <HeroText type="caption" dim>
-                Limite usado {formatBRL(used)}
-              </HeroText>
-              <HeroText type="caption" dim>
-                de {formatBRL(card.limit)}
-              </HeroText>
-            </Row>
-          </View>
-        ) : null}
-        <HeroText type="caption" dim>
-          Melhor dia de compra: dia {card.closingDay}
-        </HeroText>
-      </HeroCard>
-
+    <Appear style={styles.block}>
+      <ThemedText type="caption" themeColor="textSecondary">
+        Melhor dia de compra no {card.name}: dia {card.closingDay}
+      </ThemedText>
       <Card>
         {invoices.map((inv, i) => {
           const isOpen = expanded === inv.due;
@@ -267,7 +263,7 @@ function CardBlock({
           );
         })}
       </Card>
-    </View>
+    </Appear>
   );
 }
 
@@ -275,16 +271,12 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   between: { justifyContent: 'space-between' },
   block: { gap: Spacing.two, marginBottom: Spacing.two },
-  editBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  cardAmount: { marginTop: Spacing.three, gap: 2 },
-  cardLimit: { gap: Spacing.one, marginTop: Spacing.two },
+  // Bleeds to the screen edges so cards slide in from outside the content padding.
+  carousel: { marginHorizontal: -Spacing.three },
+  carouselContent: { paddingHorizontal: Spacing.three, gap: CARD_GAP },
+  dots: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  dotActive: { width: 18 },
   invoiceRow: { paddingVertical: Spacing.two, gap: Spacing.three },
   meta: { gap: 4, marginTop: 2 },
   checkSpace: { width: 28 },

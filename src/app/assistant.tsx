@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AiError, DEFAULT_AI_MODEL, extractExpensesWithAi } from '@/ai/claude';
 import { useHasApiKey } from '@/ai/key-store';
 import { categoryIcon, Icon, IconBadge } from '@/components/icon';
+import { Skeleton } from '@/components/motion';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AppRefreshControl, Button, Row } from '@/components/ui';
@@ -174,9 +175,19 @@ export default function AssistantScreen() {
                     : { backgroundColor: theme.backgroundElement },
                 ]}>
                 {m.loading ? (
-                  <ThemedText type="small" themeColor="textSecondary">
-                    ✨ Entendendo…
-                  </ThemedText>
+                  // Placeholder shaped like the expense card that is on its way.
+                  <View style={styles.thinking} accessible accessibilityLabel="Entendendo sua mensagem">
+                    <ThemedText type="caption" themeColor="textSecondary">
+                      ✨ Entendendo…
+                    </ThemedText>
+                    <Row style={styles.thinkingRow}>
+                      <Skeleton width={40} height={40} radius={20} />
+                      <View style={styles.thinkingLines}>
+                        <Skeleton width="70%" />
+                        <Skeleton width="45%" height={12} />
+                      </View>
+                    </Row>
+                  </View>
                 ) : null}
                 {m.text ? (
                   <ThemedText type="small" style={m.role === 'user' ? { color: theme.onPrimary } : undefined}>
@@ -358,6 +369,9 @@ function DraftCard({
 }
 
 const styles = StyleSheet.create({
+  thinking: { gap: 10, minWidth: 220 },
+  thinkingRow: { gap: 12 },
+  thinkingLines: { flex: 1, gap: 8 },
   flex: { flex: 1 },
   messages: {
     padding: Spacing.three,

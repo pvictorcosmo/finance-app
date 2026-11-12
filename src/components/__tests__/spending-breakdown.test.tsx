@@ -2,16 +2,13 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { router } from 'expo-router';
 
 import { SpendingBreakdown } from '../spending-breakdown';
+import { categoryBreakdown, previousCycleCharges } from '@/domain/breakdown';
 import { computeBudget } from '@/domain/budget';
 import { cycleFor } from '@/domain/cycle';
 import { makeCategory, makeData, makeExpense } from '@/test-utils/factories';
 
 jest.mock('expo-router', () => ({ router: { navigate: jest.fn() } }));
 jest.mock('expo-symbols', () => ({ SymbolView: () => null }));
-// The hide-values preference is persisted with AsyncStorage.
-jest.mock('@react-native-async-storage/async-storage', () =>
-  jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
-);
 
 const today = '2026-11-11';
 const data = makeData({
@@ -28,9 +25,10 @@ const data = makeData({
 });
 const cycle = cycleFor(today, 1);
 const charges = computeBudget(data, cycle, today).charges;
+const breakdown = categoryBreakdown(charges, previousCycleCharges(data, cycle, today, true), data.categories);
 
 async function renderBreakdown() {
-  await render(<SpendingBreakdown data={data} cycle={cycle} charges={charges} today={today} isCurrent />);
+  await render(<SpendingBreakdown data={data} charges={charges} breakdown={breakdown} isCurrent />);
 }
 
 describe('SpendingBreakdown', () => {
@@ -62,7 +60,8 @@ describe('SpendingBreakdown', () => {
   });
 
   it('renders nothing without spending', async () => {
-    await render(<SpendingBreakdown data={data} cycle={cycle} charges={[]} today={today} isCurrent />);
+    const empty = categoryBreakdown([], [], data.categories);
+    await render(<SpendingBreakdown data={data} charges={[]} breakdown={empty} isCurrent />);
     expect(screen.queryByText('PARA ONDE FOI SEU DINHEIRO')).toBeNull();
   });
 });

@@ -1,6 +1,9 @@
-import type { Charge } from './charges';
+import { computeBudget } from './budget';
+import { budgetDate, type Charge } from './charges';
+import { elapsedDays, shiftCycle, type Cycle } from './cycle';
+import { addDays } from './dates';
 import { merchantKey, normalize } from './text';
-import type { Cents, ID, PlanCategory } from './types';
+import type { Cents, FinanceData, ID, ISODate, PlanCategory } from './types';
 
 /** Id used for charges whose category no longer exists. */
 export const UNCATEGORIZED = '__none__';
@@ -136,4 +139,21 @@ export function chargesOfSlice(charges: Charge[], sliceId: ID, categories: PlanC
 export function changeRatio(current: Cents, previous: Cents): number | null {
   if (previous <= 0) return null;
   return Math.round(((current - previous) / previous) * 100) / 100;
+}
+
+/**
+ * Charges of the cycle before `cycle`, for comparisons. While `cycle` is still running
+ * the previous one is cut at the same day, so "até hoje" compares like with like.
+ * @param data App data.
+ * @param cycle Cycle being shown.
+ * @param today Reference date.
+ * @param isCurrent Whether `cycle` is the running one.
+ */
+export function previousCycleCharges(data: FinanceData, cycle: Cycle, today: ISODate, isCurrent: boolean): Charge[] {
+  const prev = shiftCycle(cycle, data.settings.cycleStartDay, -1);
+  const all = computeBudget(data, prev, today).charges;
+  if (!isCurrent) return all;
+  const limit = addDays(prev.start, elapsedDays(cycle, today) - 1);
+  const basis = data.settings.cardBudgetBasis ?? 'due';
+  return all.filter((c) => budgetDate(c, basis) <= limit);
 }

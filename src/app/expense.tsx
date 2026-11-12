@@ -2,10 +2,12 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
+import { AmountKeypad } from '@/components/amount-keypad';
 import { DateField } from '@/components/date-field';
-import { ThemedText } from '@/components/themed-text';
 import { categoryIcon } from '@/components/icon';
-import { AmountInput, Button, Card, Chips, DayStepper, Field, FormScreen } from '@/components/ui';
+import { MoneyText } from '@/components/money-text';
+import { ThemedText } from '@/components/themed-text';
+import { Button, Card, Chips, DayStepper, Field, FormScreen } from '@/components/ui';
 import { computeBudget } from '@/domain/budget';
 import { budgetDate, expenseCharges, installmentCount } from '@/domain/charges';
 import { cycleFor } from '@/domain/cycle';
@@ -17,6 +19,7 @@ import { autocomplete, buildHistoryIndex, suggestByKeywords, suggestFromHistory 
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useFinance, useFinanceData } from '@/store/finance-store';
+import { haptic } from '@/ui/haptics';
 
 type AmountMode = 'total' | 'installment';
 
@@ -60,6 +63,8 @@ export default function ExpenseForm() {
     payment: !!source || !!draft?.paymentKey,
   });
   const [suggested, setSuggested] = useState<string | null>(null);
+  // New expenses open with the keypad; editing shows it after tapping the amount.
+  const [showKeypad, setShowKeypad] = useState(!existing);
 
   /** Updates the description and fills category/payment from history (or keywords). */
   const changeDescription = (text: string) => {
@@ -116,9 +121,12 @@ export default function ExpenseForm() {
   })();
 
   const canSave = total !== null && total > 0 && !!categoryId;
+  const typedCents = typed ?? 0;
+  const amountLabel = count > 1 ? (amountMode === 'total' ? 'Valor total' : 'Valor de cada parcela') : 'Valor';
 
   const save = () => {
     if (!canSave || !categoryId || total === null) return;
+    haptic.success();
     saveExpense({
       id: existing?.id,
       amount: total,
@@ -133,6 +141,7 @@ export default function ExpenseForm() {
 
   const remove = () => {
     if (!existing) return;
+    haptic.warning();
     Alert.alert(
       'Excluir gasto?',
       existing.installments && existing.installments > 1
@@ -157,7 +166,7 @@ export default function ExpenseForm() {
   const left = preview?.status && preview.status.limit > 0 ? preview.status.remaining : null;
 
   return (
-    <FormScreen>
+    <FormScreen footer={<Button label="Salvar" onPress={save} disabled={!canSave} />}>
       <Stack.Screen options={{ title: existing ? 'Editar gasto' : repeated ? 'Repetir gasto' : 'Novo gasto' }} />
       {!existing ? (
         <Button
@@ -168,12 +177,43 @@ export default function ExpenseForm() {
           onPress={() => router.replace('/assistant')}
         />
       ) : null}
-      <AmountInput
-        label={count > 1 ? (amountMode === 'total' ? 'Valor total' : 'Valor de cada parcela') : 'Valor'}
-        value={amount}
-        onChangeText={setAmount}
-        autoFocus={!existing}
+      {/* Amount: big display + own keypad (tap the amount to show it again). */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${amountLabel}: ${formatBRL(typedCents)}. Toque para editar`}
+        onPress={() => setShowKeypad(true)}
+        style={styles.amount}>
+        <ThemedText type="caption" themeColor="textSecondary" style={styles.amountLabel}>
+          {amountLabel}
+        </ThemedText>
+        <MoneyText value={typedCents} size="hero" reveal themeColor={typedCents ? 'text' : 'textSecondary'} />
+      </Pressable>
+      {showKeypad ? (
+        <AmountKeypad value={typedCents} onChange={(c) => setAmount(c ? centsToInput(c) : '')} />
+      ) : null}
+
+      <Chips
+        label="Categoria"
+        options={data.categories.map((c) => ({ value: c.id, label: c.name, color: c.color, icon: categoryIcon(c) }))}
+        value={categoryId}
+        onChange={(id) => {
+          setCategoryId(id);
+          setTouched((t) => ({ ...t, category: true }));
+          setSuggested(null);
+        }}
       />
+      {suggested ? (
+        <ThemedText type="caption" themeColor="textSecondary">
+          ✨ {suggested.charAt(0).toUpperCase() + suggested.slice(1)}.
+        </ThemedText>
+      ) : null}
+      {left !== null && category ? (
+        <ThemedText type="small" style={{ color: left < 0 ? theme.danger : theme.textSecondary }}>
+          {left < 0
+            ? `! Com este gasto, ${category.name} passa ${formatBRL(-left)} do limite neste ciclo.`
+            : `Depois deste gasto sobram ${formatBRL(left)} de ${formatBRL(preview!.status!.limit)} em ${category.name} neste ciclo.`}
+        </ThemedText>
+      ) : null}
 
       <Chips
         label="Pagamento"
@@ -212,6 +252,8 @@ export default function ExpenseForm() {
       <Field
         label="Descrição"
         value={description}
+        // The system keyboard takes the keypad's place while typing text.
+        onFocus={() => setShowKeypad(false)}
         onChangeText={changeDescription}
         placeholder={category ? `Ex.: ${category.name}` : 'Ex.: Mercado'}
       />
@@ -232,29 +274,6 @@ export default function ExpenseForm() {
             </Pressable>
           ))}
         </View>
-      ) : null}
-
-      <Chips
-        label="Categoria"
-        options={data.categories.map((c) => ({ value: c.id, label: c.name, color: c.color, icon: categoryIcon(c) }))}
-        value={categoryId}
-        onChange={(id) => {
-          setCategoryId(id);
-          setTouched((t) => ({ ...t, category: true }));
-          setSuggested(null);
-        }}
-      />
-      {suggested ? (
-        <ThemedText type="caption" themeColor="textSecondary">
-          ✨ {suggested.charAt(0).toUpperCase() + suggested.slice(1)}.
-        </ThemedText>
-      ) : null}
-      {left !== null && category ? (
-        <ThemedText type="small" style={{ color: left < 0 ? theme.danger : theme.textSecondary }}>
-          {left < 0
-            ? `! Com este gasto, ${category.name} passa ${formatBRL(-left)} do limite neste ciclo.`
-            : `Depois deste gasto sobram ${formatBRL(left)} de ${formatBRL(preview!.status!.limit)} em ${category.name} neste ciclo.`}
-        </ThemedText>
       ) : null}
 
       <DateField label="Data da compra" value={date} onChange={setDate} />
@@ -286,7 +305,6 @@ export default function ExpenseForm() {
         </Card>
       ) : null}
 
-      <Button label="Salvar" onPress={save} disabled={!canSave} />
       {existing ? (
         <Button
           label="Repetir para hoje"
@@ -301,6 +319,8 @@ export default function ExpenseForm() {
 }
 
 const styles = StyleSheet.create({
+  amount: { alignItems: 'center', paddingVertical: Spacing.two, gap: Spacing.one },
+  amountLabel: { textTransform: 'uppercase', letterSpacing: 0.6 },
   completions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginTop: -Spacing.one },
   completion: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
   pressed: { opacity: 0.6 },

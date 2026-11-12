@@ -58,6 +58,8 @@ const ICONS = {
   eyeOff: { ios: 'eye.slash', android: 'visibility_off', web: 'visibility_off' },
   settings: { ios: 'gearshape', android: 'settings', web: 'settings' },
   list: { ios: 'list.bullet.rectangle', android: 'receipt_long', web: 'receipt_long' },
+  contactless: { ios: 'wave.3.right', android: 'contactless', web: 'contactless' },
+  backspace: { ios: 'delete.left', android: 'backspace', web: 'backspace' },
 } satisfies Record<string, SymbolName>;
 
 export type IconName = keyof typeof ICONS;
