@@ -24,13 +24,14 @@ import { Spacing } from '@/constants/theme';
 import { invoiceCharges } from '@/domain/invoice-charges';
 import { addDays, formatShort, relativeDays, todayISO } from '@/domain/dates';
 import { upcomingInvoices, type Invoice } from '@/domain/invoice';
-import { formatBRL } from '@/domain/money';
+import { useMoney } from '@/store/ui-store';
 import type { CreditCard } from '@/domain/types';
 import { useTheme } from '@/hooks/use-theme';
 import { useFinance, useFinanceData } from '@/store/finance-store';
 
 export default function CardsScreen() {
   const theme = useTheme();
+  const { money: formatBRL } = useMoney();
   const data = useFinanceData();
   const toggleInvoicePaid = useFinance((s) => s.toggleInvoicePaid);
   const today = todayISO();
@@ -143,6 +144,7 @@ function CardBlock({
   onTogglePaid: (due: string) => void;
 }) {
   const theme = useTheme();
+  const { money: formatBRL } = useMoney();
   const series = useSeriesColor();
   const [expanded, setExpanded] = useState<string | null>(null);
   // Limite comprometido: tudo que ainda não foi pago (inclui parcelas futuras).

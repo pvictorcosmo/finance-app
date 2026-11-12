@@ -51,6 +51,13 @@ const ICONS = {
   download: { ios: 'tray.and.arrow.down.fill', android: 'download', web: 'download' },
   undo: { ios: 'arrow.uturn.backward', android: 'undo', web: 'undo' },
   key: { ios: 'key.fill', android: 'key', web: 'key' },
+  search: { ios: 'magnifyingglass', android: 'search', web: 'search' },
+  close: { ios: 'xmark', android: 'close', web: 'close' },
+  filter: { ios: 'line.3.horizontal.decrease', android: 'filter_list', web: 'filter_list' },
+  eye: { ios: 'eye', android: 'visibility', web: 'visibility' },
+  eyeOff: { ios: 'eye.slash', android: 'visibility_off', web: 'visibility_off' },
+  settings: { ios: 'gearshape', android: 'settings', web: 'settings' },
+  list: { ios: 'list.bullet.rectangle', android: 'receipt_long', web: 'receipt_long' },
 } satisfies Record<string, SymbolName>;
 
 export type IconName = keyof typeof ICONS;

@@ -3,6 +3,7 @@ import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 
+/** Native bottom tabs: Início, Extrato, Cartões and Planejar. */
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
@@ -14,23 +15,18 @@ export default function AppTabs() {
       iconColor={{ selected: colors.accent }}
       labelStyle={{ selected: { color: colors.accent, fontWeight: '600' } }}>
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Resumo</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: 'chart.pie', selected: 'chart.pie.fill' }} md="pie_chart" />
+        <NativeTabs.Trigger.Label>Início</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="calendar">
-        <NativeTabs.Trigger.Label>Calendário</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="calendar" md="calendar_month" />
+      <NativeTabs.Trigger name="extrato">
+        <NativeTabs.Trigger.Label>Extrato</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'list.bullet.rectangle', selected: 'list.bullet.rectangle.fill' }} md="receipt_long" />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="cards">
         <NativeTabs.Trigger.Label>Cartões</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'creditcard', selected: 'creditcard.fill' }} md="credit_card" />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="receivables">
-        <NativeTabs.Trigger.Label>Devedores</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: 'person.2', selected: 'person.2.fill' }} md="group" />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="plan">

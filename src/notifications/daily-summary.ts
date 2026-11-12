@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { AndroidImportance, AndroidNotificationVisibility } from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import { FEATURES } from '@/constants/features';
 import { addDays, parseISO, todayISO } from '@/domain/dates';
 import { buildDailySummary } from '@/domain/summary';
 import type { DailySummarySettings, FinanceData } from '@/domain/types';
@@ -112,7 +113,7 @@ export async function rescheduleDailySummaries(
     const date = addDays(today, i);
     const when = at(date, settings.hour, settings.minute);
     if (when <= now) continue;
-    const { title, body } = buildDailySummary(data, date);
+    const { title, body } = buildDailySummary(data, date, { includePeople: FEATURES.receivables });
     await Notifications.scheduleNotificationAsync({
       identifier: `${KIND}-${date}`,
       content: { title, body, data: { kind: KIND, date }, sound: 'default', categoryIdentifier: SUMMARY_CATEGORY },
@@ -127,7 +128,7 @@ export async function rescheduleDailySummaries(
 export async function sendTestSummary(data: FinanceData, seconds: number | null): Promise<PermissionResult> {
   const permission = await requestPermission();
   if (permission !== 'granted') return permission;
-  const { title, body } = buildDailySummary(data, todayISO());
+  const { title, body } = buildDailySummary(data, todayISO(), { includePeople: FEATURES.receivables });
   await Notifications.scheduleNotificationAsync({
     content: { title, body, data: { kind: 'daily-summary-test' }, sound: 'default', categoryIdentifier: SUMMARY_CATEGORY },
     trigger: seconds

@@ -7,6 +7,7 @@ import { MonthCalendar, type DayMarkers } from '@/components/month-calendar';
 import { ThemedText } from '@/components/themed-text';
 import { Card, Dot, EmptyState, Fab, KeyValue, ListItem, Row, Screen, SectionHeader } from '@/components/ui';
 import { incomeDateInCycle } from '@/domain/budget';
+import { FEATURES } from '@/constants/features';
 import { allAgreementOccurrences } from '@/domain/agreements';
 import { allCharges } from '@/domain/charges';
 import { invoiceCharges } from '@/domain/invoice-charges';
@@ -55,7 +56,10 @@ export default function CalendarScreen() {
   );
 
   const monthAgreements = useMemo(
-    () => allAgreementOccurrences(data.agreements, monthRange.end, today).filter((o) => o.date.startsWith(monthPrefix)),
+    () =>
+      FEATURES.receivables
+        ? allAgreementOccurrences(data.agreements, monthRange.end, today).filter((o) => o.date.startsWith(monthPrefix))
+        : [],
     [data.agreements, monthRange.end, today, monthPrefix],
   );
 
@@ -63,7 +67,10 @@ export default function CalendarScreen() {
   const cardCharges = useMemo(() => invoiceCharges(data, today), [data, today]);
 
   const monthReceivables = useMemo(
-    () => allReceivableInstallments(data.receivables, today).filter((i) => i.due.startsWith(monthPrefix)),
+    () =>
+      FEATURES.receivables
+        ? allReceivableInstallments(data.receivables, today).filter((i) => i.due.startsWith(monthPrefix))
+        : [],
     [data.receivables, today, monthPrefix],
   );
 
@@ -123,6 +130,7 @@ export default function CalendarScreen() {
   return (
     <Screen
       title="Calendário"
+      onBack={() => router.back()}
       fab={<Fab label="Gasto" onPress={() => router.push({ pathname: '/expense', params: { date: selected } })} />}>
       <Card>
         <MonthCalendar
@@ -240,8 +248,8 @@ export default function CalendarScreen() {
 
       <Row style={styles.legend}>
         <Legend color={theme.warning} label="Conta fixa" />
-        <Legend color={theme.success} label="Entradas e devedores" />
-        <Legend color={theme.accent} label="Acordos" />
+        <Legend color={theme.success} label={FEATURES.receivables ? 'Entradas e devedores' : 'Entradas'} />
+        {FEATURES.receivables ? <Legend color={theme.accent} label="Acordos" /> : null}
         <Legend color={theme.accent} label="Gastos (cor da categoria)" />
       </Row>
     </Screen>

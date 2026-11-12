@@ -4,6 +4,7 @@ import { Alert, Linking, StyleSheet, Switch, View } from 'react-native';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chips, DayStepper, Row } from '@/components/ui';
+import { FEATURES } from '@/constants/features';
 import { Spacing } from '@/constants/theme';
 import { todayISO } from '@/domain/dates';
 import { buildDailySummary } from '@/domain/summary';
@@ -28,7 +29,7 @@ export function DailySummarySettings() {
   const [permission, setPermission] = useState<PermissionResult | null>(null);
   const [sent, setSent] = useState<string | null>(null);
 
-  const preview = useMemo(() => buildDailySummary(data, todayISO()), [data]);
+  const preview = useMemo(() => buildDailySummary(data, todayISO(), { includePeople: FEATURES.receivables }), [data]);
 
   const toggle = async (on: boolean) => {
     if (!on) {
