@@ -9,4 +9,11 @@ import type { FirebaseOptions } from 'firebase/app';
  * their own data). While this is `null`, cloud sync stays disabled and the app keeps
  * working offline exactly as before.
  */
-export const firebaseConfig: FirebaseOptions | null = null;
+export const firebaseConfig: FirebaseOptions | null = {
+  apiKey: 'AIzaSyCOXzvx-BkcGTXEVK8PDL_gp3sj41eNXtI',
+  authDomain: 'finance-app-e648d.firebaseapp.com',
+  projectId: 'finance-app-e648d',
+  storageBucket: 'finance-app-e648d.firebasestorage.app',
+  messagingSenderId: '845694924793',
+  appId: '1:845694924793:web:20591cd2a9e7f8b9b76f28',
+};

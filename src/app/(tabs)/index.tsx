@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, useColorScheme, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { categoryIcon, Icon, type IconName } from '@/components/icon';
+import { openStatement, SpendingBreakdown } from '@/components/spending-breakdown';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -242,6 +243,15 @@ export default function HomeScreen() {
               </Card>
             ) : null}
 
+            {/* Where the money went */}
+            <SpendingBreakdown
+              data={data}
+              cycle={cycle}
+              charges={budget.charges}
+              today={today}
+              isCurrent={isCurrent}
+            />
+
             {/* Categories */}
             {budget.categories.length ? (
               <>
@@ -431,7 +441,9 @@ function CategoryRow({ status, showPace }: { status: CategoryStatus; showPace: b
             </ThemedText>
           </View>
         }
-        onPress={() => router.navigate({ pathname: '/extrato' })}
+        onPress={() =>
+          openStatement({ category: category.id })
+        }
       />
       <View style={styles.catBar}>
         <ProgressBar
