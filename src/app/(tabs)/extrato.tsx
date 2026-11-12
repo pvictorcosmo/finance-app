@@ -4,6 +4,8 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ColumnChart } from '@/components/column-chart';
 import { categoryIcon, Icon } from '@/components/icon';
+import { MoneyText } from '@/components/money-text';
+import { Appear } from '@/components/motion';
 import { ThemedText } from '@/components/themed-text';
 import {
   Button,
@@ -202,7 +204,7 @@ export default function StatementScreen() {
         <ThemedText type="caption" themeColor="textSecondary">
           {result.filtered ? 'TOTAL ENCONTRADO' : `TOTAL · ${PERIOD_LABELS[filters.period].toUpperCase()}`}
         </ThemedText>
-        <ThemedText type="amount">{money(result.total)}</ThemedText>
+        <MoneyText value={result.total} />
         <ThemedText type="caption" themeColor="textSecondary">
           {result.count} {result.count === 1 ? 'compra' : 'compras'}
           {result.count ? ` · média de ${money(result.average)}` : ''}
@@ -245,15 +247,16 @@ export default function StatementScreen() {
       {result.count === 0 ? (
         <EmptyState
           icon="search"
+          title={result.filtered ? 'Nada por aqui' : 'Nenhuma compra ainda'}
           text={
             result.filtered
-              ? 'Nenhuma compra encontrada. Tente outro termo, período ou filtro.'
-              : 'Nenhuma compra neste período.'
+              ? 'Nenhuma compra combina com essa busca. Tente outro termo, período ou filtro.'
+              : 'Quando você lançar gastos, eles aparecem aqui, organizados por dia.'
           }
         />
       ) : (
-        groups.map((g) => (
-          <View key={g.date} style={styles.group}>
+        groups.map((g, i) => (
+          <Appear key={g.date} index={i} style={styles.group}>
             <Row style={styles.dayHeader}>
               <ThemedText type="smallBold" themeColor="textSecondary">
                 {dayLabel(g.date, today)}
@@ -280,7 +283,7 @@ export default function StatementScreen() {
                 );
               })}
             </Card>
-          </View>
+          </Appear>
         ))
       )}
 

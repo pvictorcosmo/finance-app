@@ -5,6 +5,9 @@ import { Pressable, ScrollView, StyleSheet, useColorScheme, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { categoryIcon, Icon, type IconName } from '@/components/icon';
+import { InsightsCard } from '@/components/insights-card';
+import { MoneyText } from '@/components/money-text';
+import { Appear, PressableScale } from '@/components/motion';
 import { openStatement, SpendingBreakdown } from '@/components/spending-breakdown';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -24,10 +27,12 @@ import {
 } from '@/components/ui';
 import { FEATURES } from '@/constants/features';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { categoryBreakdown, previousCycleCharges } from '@/domain/breakdown';
 import { computeBudget, type CategoryStatus } from '@/domain/budget';
 import { dueDateInCycle } from '@/domain/cycle';
 import { formatShort, relativeDays } from '@/domain/dates';
 import { cycleHistory, savingsTotal } from '@/domain/history';
+import { buildInsights } from '@/domain/insights';
 import { upcomingInvoices } from '@/domain/invoice';
 import { invoiceCharges } from '@/domain/invoice-charges';
 import { paymentLabel } from '@/domain/payment';
@@ -102,6 +107,14 @@ export default function HomeScreen() {
       .filter((x) => x.invoice);
   }, [data, today]);
   const paid = data.fixedPaid[cycle.start] ?? [];
+  const breakdown = useMemo(
+    () => categoryBreakdown(budget.charges, previousCycleCharges(data, cycle, today, isCurrent), data.categories),
+    [budget.charges, data, cycle, today, isCurrent],
+  );
+  const insights = useMemo(
+    () => buildInsights(budget, breakdown, cycle, today, money),
+    [budget, breakdown, cycle, today, money],
+  );
 
   const shortcuts: Shortcut[] = [
     { icon: 'add', label: 'Lançar gasto', onPress: () => router.push('/expense') },
@@ -163,9 +176,7 @@ export default function HomeScreen() {
                 <ThemedText type="caption" style={heroMuted}>
                   {over ? 'Passou do livre em' : isCurrent ? 'Disponível no mês' : 'Sobrou no ciclo'}
                 </ThemedText>
-                <ThemedText type="title" style={heroText} accessibilityLabel={hidden ? 'Valor oculto' : undefined}>
-                  {money(Math.abs(budget.leftover))}
-                </ThemedText>
+                <MoneyText value={Math.abs(budget.leftover)} size="hero" animate style={heroText} />
                 <ThemedText type="small" style={heroMuted}>
                   de {money(budget.free)} livres
                   {isCurrent ? ` · faltam ${budget.daysLeft} ${budget.daysLeft === 1 ? 'dia' : 'dias'}` : ''}
@@ -192,19 +203,21 @@ export default function HomeScreen() {
           {/* Shortcuts */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shortcuts}>
             {shortcuts.map((s) => (
-              <Pressable
+              <PressableScale
                 key={s.label}
                 accessibilityRole="button"
                 accessibilityLabel={s.label}
                 onPress={s.onPress}
-                style={({ pressed }) => [styles.shortcut, pressed && styles.pressed]}>
-                <View style={[styles.shortcutCircle, { backgroundColor: theme.backgroundSelected }]}>
-                  <Icon name={s.icon} size={24} color={theme.text} />
+                scaleTo={0.92}
+                feedback="tap"
+                style={styles.shortcut}>
+                <View style={[styles.shortcutCircle, { backgroundColor: theme.backgroundElement }]}>
+                  <Icon name={s.icon} size={24} color={theme.accent} />
                 </View>
                 <ThemedText type="caption" style={styles.center} numberOfLines={2}>
                   {s.label}
                 </ThemedText>
-              </Pressable>
+              </PressableScale>
             ))}
           </ScrollView>
 
@@ -216,6 +229,9 @@ export default function HomeScreen() {
                 action={<Button label="Configurar meu mês" icon="chevronRight" onPress={() => router.navigate('/plan')} />}
               />
             ) : null}
+
+            {/* What matters this month, in a few sentences */}
+            {isCurrent ? <InsightsCard insights={insights} /> : null}
 
             {/* Card bills */}
             {cardBills.length ? (
@@ -244,13 +260,7 @@ export default function HomeScreen() {
             ) : null}
 
             {/* Where the money went */}
-            <SpendingBreakdown
-              data={data}
-              cycle={cycle}
-              charges={budget.charges}
-              today={today}
-              isCurrent={isCurrent}
-            />
+            <SpendingBreakdown data={data} charges={budget.charges} breakdown={breakdown} isCurrent={isCurrent} />
 
             {/* Categories */}
             {budget.categories.length ? (
@@ -344,13 +354,18 @@ export default function HomeScreen() {
               }
             />
             {recent.length === 0 ? (
-              <EmptyState icon="cart" text="Nenhuma compra neste ciclo ainda. Toque em Lançar gasto para começar." />
+              <EmptyState
+                icon="cart"
+                title="Nenhum gasto ainda"
+                text="Que ciclo tranquilo! Quando comprar algo, toque em Gasto para lançar em segundos."
+              />
             ) : (
               <Card>
                 {recent.map((c, i) => {
                   const cat = data.categories.find((x) => x.id === c.categoryId);
                   return (
-                    <Fragment key={c.id}>
+                    // A newly added purchase slides in at the top.
+                    <Appear key={c.id} index={i}>
                       {i > 0 ? <Divider /> : null}
                       <ListItem
                         icon={cat ? categoryIcon(cat) : 'tag'}
@@ -360,7 +375,7 @@ export default function HomeScreen() {
                         right={money(c.amount)}
                         onPress={() => router.push({ pathname: '/expense', params: { id: c.expenseId } })}
                       />
-                    </Fragment>
+                    </Appear>
                   );
                 })}
               </Card>

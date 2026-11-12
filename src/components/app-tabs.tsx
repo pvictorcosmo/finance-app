@@ -1,5 +1,5 @@
 import { NativeTabs } from 'expo-router/native-tabs';
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 
@@ -10,8 +10,11 @@ export default function AppTabs() {
 
   return (
     <NativeTabs
-      backgroundColor={colors.background}
+      // iOS draws its own translucent, blurred bar; Android gets the app background.
+      backgroundColor={Platform.OS === 'ios' ? undefined : colors.background}
+      blurEffect={Platform.OS === 'ios' ? 'systemChromeMaterial' : undefined}
       indicatorColor={colors.primarySoft}
+      rippleColor={colors.primarySoft}
       iconColor={{ selected: colors.accent }}
       labelStyle={{ selected: { color: colors.accent, fontWeight: '600' } }}>
       <NativeTabs.Trigger name="index">
